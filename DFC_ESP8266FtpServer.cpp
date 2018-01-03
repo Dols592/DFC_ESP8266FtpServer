@@ -28,13 +28,13 @@
   #define DBGF(...)
 #endif
 
-DFC_ESP7266FTPServer::DFC_ESP7266FTPServer()
+DFC_ESP7266FtpServer::DFC_ESP7266FtpServer()
   : mFtpServer( FTP_CONTROL_PORT )
   , mLastDataPort(FTP_DATA_PORT_START)
 {
 }
 
-void DFC_ESP7266FTPServer::Start()
+void DFC_ESP7266FtpServer::Start()
 {
 #if(0)
   DBGLN("=============================================");
@@ -49,7 +49,7 @@ void DFC_ESP7266FTPServer::Start()
   mFtpServer.begin();
 }
 
-void DFC_ESP7266FTPServer::Loop()
+void DFC_ESP7266FtpServer::Loop()
 {
   if (mFtpServer.hasClient())
   {
@@ -88,7 +88,7 @@ void DFC_ESP7266FTPServer::Loop()
   }
 }
 
-bool DFC_ESP7266FTPServer::GetEmptyClientInfo(int32_t& Pos)
+bool DFC_ESP7266FtpServer::GetEmptyClientInfo(int32_t& Pos)
 {
   for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
   {
@@ -103,7 +103,7 @@ bool DFC_ESP7266FTPServer::GetEmptyClientInfo(int32_t& Pos)
   return false;
 }
 
-void DFC_ESP7266FTPServer::CheckClient(SClientInfo& Client)
+void DFC_ESP7266FtpServer::CheckClient(SClientInfo& Client)
 {
   //is still connected?
   if (!Client.ClientConnection.connected())
@@ -137,7 +137,7 @@ void DFC_ESP7266FTPServer::CheckClient(SClientInfo& Client)
   GetControlData(Client);
 }
 
-void DFC_ESP7266FTPServer::CheckData(SClientInfo& Client)
+void DFC_ESP7266FtpServer::CheckData(SClientInfo& Client)
 {
   if (Client.PasvListenServer == NULL || !Client.DataConnection.connected())
     return;
@@ -159,7 +159,7 @@ void DFC_ESP7266FTPServer::CheckData(SClientInfo& Client)
   Client.TransferCommand = NTC_NONE;
 }
 
-void DFC_ESP7266FTPServer::DisconnectClient(SClientInfo& Client)
+void DFC_ESP7266FtpServer::DisconnectClient(SClientInfo& Client)
 {
   if (Client.ClientConnection.connected())
     Client.ClientConnection.println("221 Goodbye");
@@ -167,7 +167,7 @@ void DFC_ESP7266FTPServer::DisconnectClient(SClientInfo& Client)
   Client.Reset();
 }
 
-void DFC_ESP7266FTPServer::GetControlData(SClientInfo& Client)
+void DFC_ESP7266FtpServer::GetControlData(SClientInfo& Client)
 {
   while(1)
   {
@@ -219,7 +219,7 @@ void DFC_ESP7266FTPServer::GetControlData(SClientInfo& Client)
   }
 }
 
-String DFC_ESP7266FTPServer::GetFirstArgument(SClientInfo& Client)
+String DFC_ESP7266FtpServer::GetFirstArgument(SClientInfo& Client)
 {
   int32_t Start = 0;
   int32_t End = Client.Arguments.length();
@@ -232,7 +232,7 @@ String DFC_ESP7266FTPServer::GetFirstArgument(SClientInfo& Client)
   return Client.Arguments.substring(Start, End);
 }
 
-String DFC_ESP7266FTPServer::ConstructPath(SClientInfo& Client)
+String DFC_ESP7266FtpServer::ConstructPath(SClientInfo& Client)
 {
   String Path = GetFirstArgument(Client);
   Path.replace("\\", "/");
@@ -251,7 +251,7 @@ String DFC_ESP7266FTPServer::ConstructPath(SClientInfo& Client)
 
 // return false if filepath is not in current dir
 // Stores the filename or subdirectory in FileName.
-bool DFC_ESP7266FTPServer::GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir)
+bool DFC_ESP7266FtpServer::GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir)
 {
   int32_t FilePathSize = FilePath.length();
   int32_t CurrentDirSize = CurrentDir.length();
@@ -281,7 +281,7 @@ bool DFC_ESP7266FTPServer::GetFileName(String CurrentDir, String FilePath, Strin
   return true;
 }
 
-bool DFC_ESP7266FTPServer::GetParentDir(String FilePath, String& ParentDir)
+bool DFC_ESP7266FtpServer::GetParentDir(String FilePath, String& ParentDir)
 {
   String Path = FilePath;
   Path.replace("\\", "/");
@@ -310,7 +310,7 @@ bool DFC_ESP7266FTPServer::GetParentDir(String FilePath, String& ParentDir)
   return true;
 }
 
-int32_t DFC_ESP7266FTPServer::GetNextDataPort()
+int32_t DFC_ESP7266FtpServer::GetNextDataPort()
 {
   int32_t NewPort = mLastDataPort;
   while (1)
@@ -334,7 +334,7 @@ int32_t DFC_ESP7266FTPServer::GetNextDataPort()
   }
 }
 
-void DFC_ESP7266FTPServer::ProcessCommand(SClientInfo& Client)
+void DFC_ESP7266FtpServer::ProcessCommand(SClientInfo& Client)
 {
   //preprocess
   Client.Command.trim();
@@ -373,7 +373,7 @@ void DFC_ESP7266FTPServer::ProcessCommand(SClientInfo& Client)
   Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
 }
 
-bool DFC_ESP7266FTPServer::Process_USER(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
 {
   if (Client.FtpState > NFS_WAITFORPASSWORD)
   {
@@ -410,7 +410,7 @@ bool DFC_ESP7266FTPServer::Process_USER(SClientInfo& Client)
   }
 }
 
-bool DFC_ESP7266FTPServer::Process_PASS(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
 {
   if (Client.FtpState <= NFS_WAITFORUSERNAME)
   {
@@ -435,38 +435,38 @@ bool DFC_ESP7266FTPServer::Process_PASS(SClientInfo& Client)
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_QUIT(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_QUIT(SClientInfo& Client)
 {
   DisconnectClient(Client);
   return true;  
 }
 
-bool DFC_ESP7266FTPServer::Process_SYST(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
 {
   Client.ClientConnection.println( "215 UNIX esp8266.");
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_FEAT(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_FEAT(SClientInfo& Client)
 {
   Client.ClientConnection.println( "211 No Features.");
   return true;
 }
 
 
-bool DFC_ESP7266FTPServer::Process_HELP(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_HELP(SClientInfo& Client)
 {
   Client.ClientConnection.println( "214 Ask the whizzkid for help.");
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_PWD(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_PWD(SClientInfo& Client)
 {
   Client.ClientConnection.printf( "257 \"%s\" Current Directory.\r\n", Client.CurrentPath.c_str());
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_CDUP(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
 {
   String NewPath;
   GetParentDir(Client.CurrentPath, NewPath);
@@ -478,7 +478,7 @@ bool DFC_ESP7266FTPServer::Process_CDUP(SClientInfo& Client)
 
 //Because directories are simulated, we accept CWD to 
 //dir that does not "exists".
-bool DFC_ESP7266FTPServer::Process_CWD(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 {
   String NewPath = ConstructPath(Client);
   
@@ -488,7 +488,7 @@ bool DFC_ESP7266FTPServer::Process_CWD(SClientInfo& Client)
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_MKD(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 {
   String NewPath = ConstructPath(Client);
 
@@ -499,14 +499,14 @@ bool DFC_ESP7266FTPServer::Process_MKD(SClientInfo& Client)
 
 //we never accept directory removal. If all
 //files are removed, directorie is removed automatically
-bool DFC_ESP7266FTPServer::Process_RMD(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
 {
   Client.ClientConnection.println( "550 Directories can not be removed. It is removed automatically when it's empty.");
 
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_TYPE(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
 {
   const String& arg(Client.Arguments); //for easy access
 
@@ -520,7 +520,7 @@ bool DFC_ESP7266FTPServer::Process_TYPE(SClientInfo& Client)
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_PASV(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
 {  
   IPAddress LocalIP = Client.ClientConnection.localIP();
   if (Client.PasvListenServer == NULL)
@@ -536,13 +536,13 @@ bool DFC_ESP7266FTPServer::Process_PASV(SClientInfo& Client)
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_PORT(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_PORT(SClientInfo& Client)
 {
   //Client.TransferMode = NTC_ACTIVE;
   return false;
 }
 
-bool DFC_ESP7266FTPServer::Process_DataCommand_Preprocess(SClientInfo& Client, nTransferCommand TransferCommand)
+bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client, nTransferCommand TransferCommand)
 {
   if (Client.TransferMode == NTM_UNKNOWN)
   {
@@ -569,7 +569,7 @@ bool DFC_ESP7266FTPServer::Process_DataCommand_Preprocess(SClientInfo& Client, n
   return true;
 }
 
-bool DFC_ESP7266FTPServer::Process_Data_LIST(SClientInfo& Client)
+bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
 {
   DBGLN("Sending filelist.");
 

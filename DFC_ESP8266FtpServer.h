@@ -85,10 +85,10 @@ struct SClientInfo
   }
 };
 
-class DFC_ESP7266FTPServer
+class DFC_ESP7266FtpServer
 {
 public: //Constructor
-  DFC_ESP7266FTPServer();
+  DFC_ESP7266FtpServer();
   
 public: //Interface
   void    Start();
