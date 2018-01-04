@@ -1,12 +1,19 @@
 # DFC_ESP8266FtpServer TO DO list
 
 
-ToDo
+To Do
 ------
-In it's initial development. Highly instable.
+- [ ] Check for max path length (32 bytes)
+- [ ] timeout on ftp and data connections
 
 Wish List
 ------
+
+Far Fetched and Dream list
+------
+- [ ] Abstracting Filesystem
+- [ ] Support for SD cards
+- [ ] Abstracting TCP
 
 Known Bugs
 ------
