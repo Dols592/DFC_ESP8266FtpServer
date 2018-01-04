@@ -2,7 +2,6 @@
 */
 
 //library includes
-#include <vector>
 #include "DFC_ESP8266FtpServer.h"
 #include <ESP8266WiFi.h>
 #include <FS.h>
@@ -129,12 +128,11 @@ void DFC_ESP7266FtpServer::CheckClient(SClientInfo& Client)
     DBG(":");
     DBG(Rport);
     DBGLN("");
-
-    CheckData(Client);
   }
 
   //Check for new control data
   GetControlData(Client);
+  CheckData(Client);
 }
 
 void DFC_ESP7266FtpServer::CheckData(SClientInfo& Client)
@@ -147,16 +145,17 @@ void DFC_ESP7266FtpServer::CheckData(SClientInfo& Client)
     case NTC_LIST:
       Process_Data_LIST(Client);
       break;
+    case NTC_STOR:
+      Process_Data_STOR(Client);
+      break;
+    case NTC_RETR:
+      Process_Data_RETR(Client);
+      break;
 
     default:
       return;
       break;
   }
-
-  DBGLN("Data send. Closing data connection.");
-  Client.DataConnection.flush();
-  Client.DataConnection.stop();
-  Client.TransferCommand = NTC_NONE;
 }
 
 void DFC_ESP7266FtpServer::DisconnectClient(SClientInfo& Client)
@@ -201,10 +200,10 @@ void DFC_ESP7266FtpServer::GetControlData(SClientInfo& Client)
       {
         Client.ControlState = NFS_ARGUMENTS;
         Client.Arguments = "";
-        continue;  
+        continue;
       }
     }
-    
+
     if (Client.ControlState == NCS_START)
     {
       Client.ControlState = NFS_COMMAND;
@@ -212,10 +211,10 @@ void DFC_ESP7266FtpServer::GetControlData(SClientInfo& Client)
     }
 
     if (Client.ControlState == NFS_COMMAND)
-      Client.Command += (char) NextChr;      
+      Client.Command += (char) NextChr;
 
     if (Client.ControlState == NFS_ARGUMENTS)
-      Client.Arguments += (char) NextChr;      
+      Client.Arguments += (char) NextChr;
   }
 }
 
@@ -255,7 +254,7 @@ bool DFC_ESP7266FtpServer::GetFileName(String CurrentDir, String FilePath, Strin
 {
   int32_t FilePathSize = FilePath.length();
   int32_t CurrentDirSize = CurrentDir.length();
-  
+
   if (FilePathSize <= CurrentDirSize)
     return false;
 
@@ -263,7 +262,7 @@ bool DFC_ESP7266FtpServer::GetFileName(String CurrentDir, String FilePath, Strin
     return false;
 
   int32_t NextSlash = FilePath.indexOf('/', CurrentDirSize);
-  
+
   //Check if there's more after the slash.
   //but if it's ends on a slash it's still a file with it's name ending on a /
   //That's SPIFFS specific, since it does not has directories.
@@ -277,7 +276,7 @@ bool DFC_ESP7266FtpServer::GetFileName(String CurrentDir, String FilePath, Strin
     FileName = FilePath.substring(CurrentDirSize, NextSlash);
     IsDir = true;
   }
-  
+
   return true;
 }
 
@@ -306,7 +305,7 @@ bool DFC_ESP7266FtpServer::GetParentDir(String FilePath, String& ParentDir)
     return false;
   }
 
-  ParentDir = FilePath.substring(0, Pos+1);  
+  ParentDir = FilePath.substring(0, Pos+1);
   return true;
 }
 
@@ -367,7 +366,9 @@ void DFC_ESP7266FtpServer::ProcessCommand(SClientInfo& Client)
   if (cmd.equalsIgnoreCase("TYPE") && Process_TYPE(Client)) return;
   if (cmd.equalsIgnoreCase("PASV") && Process_PASV(Client)) return;
   if (cmd.equalsIgnoreCase("PORT") && Process_PORT(Client)) return;
-  if (cmd.equalsIgnoreCase("LIST") && Process_DataCommand_Preprocess(Client, NTC_LIST)) return;
+  if (cmd.equalsIgnoreCase("LIST") && Process_LIST(Client)) return;
+  if (cmd.equalsIgnoreCase("STOR") && Process_STOR(Client)) return;
+  if (cmd.equalsIgnoreCase("RETR") && Process_RETR(Client)) return;
 
   Client.ClientConnection.println( "Command not known.");
   Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
@@ -380,7 +381,7 @@ bool DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
     Client.ClientConnection.println( "530 Changing user is not allowed.");
     return true;
   }
-  
+
   //check if user exists
   bool UsernameOK(false);
   if (mServerUsername.length() == 0) //we accept every username
@@ -400,7 +401,7 @@ bool DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
   {
     Client.ClientConnection.println( "230 OK.");
     Client.FtpState = NFS_WAITFORCOMMAND;
-    return true;    
+    return true;
   }
   else
   {
@@ -429,7 +430,7 @@ bool DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
     DisconnectClient(Client);
     return true;
   }
-  
+
   Client.ClientConnection.println( "230 Logged in.");
   Client.FtpState = NFS_WAITFORCOMMAND;
   return true;
@@ -438,7 +439,7 @@ bool DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
 bool DFC_ESP7266FtpServer::Process_QUIT(SClientInfo& Client)
 {
   DisconnectClient(Client);
-  return true;  
+  return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
@@ -472,27 +473,26 @@ bool DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
   GetParentDir(Client.CurrentPath, NewPath);
 
   Client.CurrentPath = NewPath;
-  Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");  
+  Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
   return true;
 }
 
-//Because directories are simulated, we accept CWD to 
+//Because directories are simulated, we accept CWD to
 //dir that does not "exists".
 bool DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 {
   String NewPath = ConstructPath(Client);
-  
+
   Client.CurrentPath = NewPath;
-  Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");  
+  Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
   DBGLN("New Directory: " + NewPath);
   return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 {
-  String NewPath = ConstructPath(Client);
-
-  Client.ClientConnection.printf( "257 \"%s\" is created.\n\r", NewPath.c_str());
+  Client.TempDirectory = ConstructPath(Client);
+  Client.ClientConnection.printf( "257 \"%s\" is created.\n\r", Client.TempDirectory.c_str());
 
   return true;
 }
@@ -521,15 +521,15 @@ bool DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
 }
 
 bool DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
-{  
+{
   IPAddress LocalIP = Client.ClientConnection.localIP();
   if (Client.PasvListenServer == NULL)
   {
-    Client.PasvListenPort = GetNextDataPort();
+    Client.PasvListenPort = 20; //GetNextDataPort();
     Client.PasvListenServer = new WiFiServer(Client.PasvListenPort);
     Client.PasvListenServer->begin();
   }
-  
+
   int32_t PasvPort = Client.PasvListenPort;
   Client.ClientConnection.println( "227 Entering Passive Mode ("+ String(LocalIP[0]) + "," + String(LocalIP[1])+","+ String(LocalIP[2])+","+ String(LocalIP[3])+","+String( PasvPort >> 8 ) +","+String ( PasvPort & 255 )+").");
   Client.TransferMode = NTC_PASSIVE;
@@ -542,19 +542,55 @@ bool DFC_ESP7266FtpServer::Process_PORT(SClientInfo& Client)
   return false;
 }
 
-bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client, nTransferCommand TransferCommand)
+bool DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
+{
+  if (!Process_DataCommand_Preprocess(Client))
+    return true;
+  
+  Process_DataCommand_Responds_OK(Client, NTC_LIST);
+  return true;  
+}
+
+bool DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
+{
+  if (!Process_DataCommand_Preprocess(Client))
+    return true;
+
+  //check filename
+  
+  //open file
+  
+  Process_DataCommand_Responds_OK(Client, NTC_STOR);
+  return true;
+}
+
+bool DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
+{
+  if (!Process_DataCommand_Preprocess(Client))
+    return true;
+
+  Process_DataCommand_Responds_OK(Client, NTC_RETR);
+  return false;
+}
+
+bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
 {
   if (Client.TransferMode == NTM_UNKNOWN)
   {
     Client.ClientConnection.println( "425 Use PORT or PASV first.");
-    return true;
+    return false;
   }
   if (Client.TransferCommand != NTC_NONE)
   {
     Client.ClientConnection.println( "450 Requested file action not taken, already an command is in process.");
-    return true;
+    return false;
   }
+  
+  return true;
+}
 
+bool DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand)
+{
   if (!Client.DataConnection.connected())
   {
     Client.ClientConnection.println( "150 Accepted data connection.");
@@ -569,6 +605,29 @@ bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client, n
   return true;
 }
 
+//creates a list with unique names. If a name is already present in list,
+//it returns false.
+bool DFC_ESP7266FtpServer::CheckIfPresentList(std::vector<String>& DirList, const String& Name)
+{
+  bool Found(false);
+  for (std::vector<String>::iterator it=DirList.begin(); it!=DirList.end(); it++)
+  {
+    if (Name.equals(*it))
+      Found = true;
+  }
+
+  if (!Found)
+  {
+    DirList.push_back(Name);
+  }
+  
+  return !Found;
+}
+
+////                               0         1         2         3         4         5          
+////                               012345678901234567890123456789012345678901234567890123456789
+//  Client.DataConnection.println( "-rw-rw-rw-    1 0        0              22 Jan 01  1970 1MB.zip");
+//  Client.DataConnection.println( "drw-rw-rw-    1 0        0               0 Jan 01  1970 SubDir");
 bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
 {
   DBGLN("Sending filelist.");
@@ -578,43 +637,64 @@ bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
   String FilePath;
   bool IsDir;
   std::vector<String> DirList;
-  while (dir.next()) 
-  {    
+  while (dir.next())
+  {
     String FilePath = dir.fileName();
     if (GetFileName(Client.CurrentPath, FilePath, FileName, IsDir))
     {
       if (IsDir)
       {
-        //check if listing is already been processed
-        bool Found(false);
-        for (std::vector<String>::iterator it=DirList.begin(); it!=DirList.end(); it++)
-        {
-          if (FileName.equals(*it))
-            Found = true;
-        }
-        if (!Found)
+        if (CheckIfPresentList(DirList, FileName))
         {
           Client.DataConnection.print("drw-rw-rw-    1 0        0               0 Jan 01  1970 ");
           Client.DataConnection.println(FileName);
-          DirList.push_back(FileName);
         }
       }
       else
-      {        
-        size_t fileSize = dir.fileSize();
-        Client.DataConnection.print("-rw-rw-rw-    1 0        0              22 Jan 01  1970 ");
+      {
+        //Client.DataConnection.print("-rw-rw-rw-    1 0        0              22 Jan 01  1970 ");
+        String FileSizeString = String(dir.fileSize());
+        String WhiteSpaceString = String("              ");
+        WhiteSpaceString = WhiteSpaceString.substring(FileSizeString.length());
+        
+        Client.DataConnection.print("-rw-rw-rw-    1 0        0  ");
+        Client.DataConnection.print(WhiteSpaceString);
+        Client.DataConnection.print(FileSizeString);        
+        Client.DataConnection.print(" Jan 01  1970 ");
         Client.DataConnection.println(FileName);
-      }     
+      }
+    }
+  }
+  
+  //Append the TempDirectory created at MKD if we need to add it.
+  //GetFileName wil report it's a file, but we are sure it's a directory.
+  //we ignore IsDir.
+  if (GetFileName(Client.CurrentPath, Client.TempDirectory, FileName, IsDir))
+  {
+    if (CheckIfPresentList(DirList, FileName))
+    {
+      Client.DataConnection.print("drw-rw-rw-    1 0        0               0 Jan 01  1970 ");
+      Client.DataConnection.println(FileName);
     }
   }
 
-////                                0        1         2         3         4         5          
-////                                12345678901234567890123456789012345678901234567890123456789
-//  Client.DataConnection.println( "-rw-rw-rw-    1 0        0              22 Jan 01  1970 1MB.zip");
-//  Client.DataConnection.println( "drw-rw-rw-    1 0        0               0 Jan 01  1970 SubDir");
-
-
   Client.ClientConnection.println( "226 File listing send.");
+  
+  DBGLN("Data send. Closing data connection.");
+  Client.DataConnection.flush();
+  Client.DataConnection.stop();
+  Client.TransferCommand = NTC_NONE;
+
   return true;
 }
-
+
+bool DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
+{
+  return true;
+}
+
+bool DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
+{
+  return true;
+}
+

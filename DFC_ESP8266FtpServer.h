@@ -8,6 +8,7 @@
 #endif
 
 //Includes
+#include <vector>
 #include <ESP8266WiFi.h>
 
 enum nFtpState
@@ -30,7 +31,9 @@ enum nControlState
 enum nTransferCommand
 {
   NTC_NONE = 0,
-  NTC_LIST
+  NTC_LIST,
+  NTC_STOR,
+  NTC_RETR
 };
 
 enum nTransferMode
@@ -47,7 +50,7 @@ struct SClientInfo
   WiFiClient ClientConnection;
   nFtpState FtpState;
   String CurrentPath;
-  
+
   nControlState ControlState;
   String Command;
   String Arguments;
@@ -57,7 +60,8 @@ struct SClientInfo
   WiFiServer* PasvListenServer;
   WiFiClient DataConnection;
   nTransferCommand TransferCommand;
-
+  String TempDirectory;
+  
   void Reset()
   {
     InUse = false;
@@ -77,6 +81,7 @@ struct SClientInfo
     DataConnection.flush();
     DataConnection.stop();
     TransferCommand = NTC_NONE;
+    TempDirectory = "";
   }
   SClientInfo()
   {
@@ -89,7 +94,7 @@ class DFC_ESP7266FtpServer
 {
 public: //Constructor
   DFC_ESP7266FtpServer();
-  
+
 public: //Interface
   void    Start();
   void    Loop();
@@ -105,7 +110,8 @@ protected: //Help functions
   bool      GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir);
   bool      GetParentDir(String FilePath, String& ParentDir);
   int32_t   GetNextDataPort();
-  
+  bool      CheckIfPresentList(std::vector<String>& DirList, const String& Name);
+
   void      ProcessCommand(SClientInfo& Client);
   bool      Process_USER(SClientInfo& Client);
   bool      Process_PASS(SClientInfo& Client);
@@ -121,13 +127,19 @@ protected: //Help functions
   bool      Process_TYPE(SClientInfo& Client);
   bool      Process_PASV(SClientInfo& Client);
   bool      Process_PORT(SClientInfo& Client);
-  bool      Process_DataCommand_Preprocess(SClientInfo& Client, nTransferCommand TransferCommand);
+  bool      Process_LIST(SClientInfo& Client);
+  bool      Process_STOR(SClientInfo& Client);
+  bool      Process_RETR(SClientInfo& Client);
+  bool      Process_DataCommand_Preprocess(SClientInfo& Client);
+  bool      Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand);
   bool      Process_Data_LIST(SClientInfo& Client);
+  bool      Process_Data_STOR(SClientInfo& Client);
+  bool      Process_Data_RETR(SClientInfo& Client);
 
 public: //Config
   String  mServerUsername;
   String  mServerPassword;
-  
+
 protected: //Variables
   WiFiServer mFtpServer;
   SClientInfo mClientInfo[2];
