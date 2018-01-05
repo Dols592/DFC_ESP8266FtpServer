@@ -97,6 +97,7 @@ void DFC_ESP7266FtpServer::Loop_ClientConnection(SClientInfo& Client)
     int32 Stopwatch = millis() - Client.LastReceivedCommand;
     if (Stopwatch > FTP_CONTROL_TIMEOUT)
     {
+      DBGLN(("Timeout on ClientConnection. Disconnecting"));
       Client.ClientConnection.println( "221- Timeout, Disconnecting.");
       Help_DisconnectClient(Client);
       return;
@@ -523,6 +524,7 @@ void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
       int32 Stopwatch = millis() - Client.LastReceivedData;
       if (Stopwatch > FTP_DATA_TIMEOUT)
       {
+        DBGLN(("Timeout on waiting for data connection."));
         Client.ClientConnection.println( "425 Can't open data connection.");
         Process_DataCommand_END(Client);
         return;
@@ -540,6 +542,7 @@ void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
   int32 Stopwatch = millis() - Client.LastReceivedData;
   if (Stopwatch > FTP_DATA_TIMEOUT)
   {
+    DBGLN(("It's quiet on the dataconnection. Closing."));
     Client.ClientConnection.println( "426 Connection closed; transfer aborted. Timeout on data connection.");
     Process_DataCommand_END(Client);
     return;
@@ -601,7 +604,8 @@ void DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
     //Data connection lost before we send all data. It's a abort
     case NTC_LIST:
     case NTC_RETR:
-      Client.ClientConnection.println( "426 Data connection unexpectacly disconnected. transfer aborted.");
+      DBGLN(("Data connection unexpectacly closed while sending data."));
+      Client.ClientConnection.println( "426 Data connection unexpectacly closed. transfer aborted.");
       break;
 
     //Data connection disconnected during receiving data.
