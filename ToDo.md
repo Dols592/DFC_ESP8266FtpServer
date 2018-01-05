@@ -3,15 +3,15 @@
 
 To Do v1
 ------
-- [ ] Client.TransferFile needs to be closed/checked before opening
-- [ ] Client.TransferFile needs to be checked if open before reading/writing
 - [ ] timeout on ftp and data connections
-- [ ] Implement SPIFFS.info for max path length
 - [ ] Check all replies, are make them more uniform, report filename etc
 
 - [X] Check if all error path are covered.
 - [X] Check for max path length (32 bytes)
 - [X] implement ABORT
+- [X] Client.TransferFile needs to be closed/checked before opening
+- [X] Client.TransferFile needs to be checked if open before reading/writing
+- [X] Implement SPIFFS.info for max path length
 
 To Do v2
 ------

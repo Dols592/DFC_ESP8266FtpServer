@@ -35,16 +35,9 @@ DFC_ESP7266FtpServer::DFC_ESP7266FtpServer()
 
 void DFC_ESP7266FtpServer::Init()
 {
-#if(0)
-  DBGLN("=============================================");
-  DBGLN("Testing");
-  String ParentDir = "";
-  String FilePath = "////";
-  Help_GetParentDir(FilePath, ParentDir);
-  DBGF("FilePath \"%s\"\r\n", FilePath.c_str());
-  DBGF("ParentDir \"%s\"\r\n", ParentDir.c_str());
-  DBGLN("=============================================");
-#endif
+  FSInfo fs_info;
+  SPIFFS.info(fs_info);
+  mSpiffsMaxPathLength =  fs_info.maxPathLength-1;
   mFtpServer.begin();
 }
 
@@ -432,9 +425,9 @@ void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
     return;
 
   String FilePath = Help_GetPath(Client, false);
-  if (FilePath.length() > 31)
+  if (FilePath.length() > mSpiffsMaxPathLength)
   {
-    Client.ClientConnection.printf( "553 File %s exeeds filename length of 31 characters.\r\n", FilePath.c_str());
+    Client.ClientConnection.printf( "553 File %s exeeds filename length of %d characters.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
     return;
   }
 

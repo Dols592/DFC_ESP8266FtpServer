@@ -70,6 +70,7 @@ protected: //Variables
   WiFiServer mFtpServer;
   SClientInfo mClientInfo[FTP_MAX_CLIENTS];
   int32_t mLastDataPort;
+  int32_t mSpiffsMaxPathLength;
 };
 
 #endif //DFC_ESP8266_FTP_SERVER_H
