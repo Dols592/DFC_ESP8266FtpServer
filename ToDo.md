@@ -3,7 +3,7 @@
 
 To Do v1
 ------
-- [ ] Check all replies, are make them more uniform, report filename etc
+- [X] Check all replies, are make them more uniform, report filename etc
 - [X] Add sensible DBG output on events
 - [X] Check if all error path are covered.
 - [X] Check for max path length (32 bytes)

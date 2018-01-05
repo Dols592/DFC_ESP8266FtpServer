@@ -9,12 +9,11 @@
 //Config defines
 #define FTP_DEBUG
 #define FTP_CONTROL_PORT        21
-#define FTP_CONTROL_TIMEOUT     60000
-#define FTP_DATA_PORT_START     22
-//#define FTP_DATA_PORT_START     20100
+#define FTP_CONTROL_TIMEOUT     300000
+#define FTP_DATA_PORT_START     20100
 #define FTP_DATA_PORT_END       20200
 #define FTP_DATA_BUF_SIZE       1000
-#define FTP_DATA_TIMEOUT        10000
+#define FTP_DATA_TIMEOUT        30000
 
 //debug
 #undef DBG
@@ -220,7 +219,7 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   else if (cmd.equalsIgnoreCase("RMD")) Process_RMD(Client);
   else if (cmd.equalsIgnoreCase("TYPE")) Process_TYPE(Client);
   else if (cmd.equalsIgnoreCase("PASV")) Process_PASV(Client);
-  else if (cmd.equalsIgnoreCase("PORT")) Process_PORT(Client);
+  //else if (cmd.equalsIgnoreCase("PORT")) Process_PORT(Client);
   else if (cmd.equalsIgnoreCase("LIST")) Process_LIST(Client);
   else if (cmd.equalsIgnoreCase("SIZE")) Process_SIZE(Client);
   else if (cmd.equalsIgnoreCase("DELE")) Process_DELE(Client);
@@ -229,7 +228,6 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   else if (cmd.equalsIgnoreCase("ABOR")) Process_ABOR(Client);
   else
   {
-    Client.ClientConnection.println( "Command not known.");
     Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
     Handled = false;
   }
@@ -311,7 +309,9 @@ void DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
 
 void DFC_ESP7266FtpServer::Process_FEAT(SClientInfo& Client)
 {
-  Client.ClientConnection.println( "211 No Features.");
+  Client.ClientConnection.println( "211- Supported Features.");
+  Client.ClientConnection.println( " LIST");
+  Client.ClientConnection.println( "211 end");
 }
 
 
@@ -331,7 +331,7 @@ void DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
   Help_GetParentDir(Client.CurrentPath, NewPath);
 
   Client.CurrentPath = NewPath;
-  Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
+  Client.ClientConnection.printf( "250 Directory successfully changed to %s\r\n", NewPath.c_str());
 }
 
 //Because directories are simulated, we accept CWD to
@@ -341,7 +341,7 @@ void DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
   String NewPath = Help_GetPath(Client, true);
 
   Client.CurrentPath = NewPath;
-  Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
+  Client.ClientConnection.printf( "250 Directory successfully changed to %s\r\n", NewPath.c_str());
   DBGLN("New Directory: " + NewPath);
 }
 
