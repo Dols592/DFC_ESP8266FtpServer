@@ -43,6 +43,7 @@ protected: //Help functions
   void      Process_DELE(SClientInfo& Client);
   void      Process_STOR(SClientInfo& Client);
   void      Process_RETR(SClientInfo& Client);
+  void      Process_ABOR(SClientInfo& Client);
   void      Loop_DataConnection(SClientInfo& Client);
   bool      Process_DataCommand_Preprocess(SClientInfo& Client);
   void      Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand);

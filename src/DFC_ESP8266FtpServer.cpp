@@ -11,7 +11,7 @@
 #define FTP_CONTROL_PORT        21
 #define FTP_DATA_PORT_START     20100
 #define FTP_DATA_PORT_END       20200
-
+#define FTP_DATA_BUF_SIZE       1000
 //debug
 #undef DBG
 #undef DBGLN
@@ -211,6 +211,7 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   else if (cmd.equalsIgnoreCase("DELE")) Process_DELE(Client);
   else if (cmd.equalsIgnoreCase("STOR")) Process_STOR(Client);
   else if (cmd.equalsIgnoreCase("RETR")) Process_RETR(Client);
+  else if (cmd.equalsIgnoreCase("ABOR")) Process_ABOR(Client);
   else
   {
     Client.ClientConnection.println( "Command not known.");
@@ -419,8 +420,10 @@ void DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
     return;
   }
 
-  SPIFFS.remove(FilePath);
-  Client.ClientConnection.printf( "250 File %s successful deleted.\r\n", FilePath.c_str());
+  if (!SPIFFS.remove(FilePath))
+    Client.ClientConnection.printf( "550 File %s could not be deleted.\r\n", FilePath.c_str());
+  else
+    Client.ClientConnection.printf( "250 File %s successful deleted.\r\n", FilePath.c_str());
 }
 
 void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
@@ -428,16 +431,22 @@ void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
   if (!Process_DataCommand_Preprocess(Client))
     return;
 
-  //check filename
   String FilePath = Help_GetPath(Client, false);
   if (FilePath.length() > 31)
   {
-    Client.ClientConnection.printf( "550 File %s exeeds filename length of 31 characters.\r\n", FilePath.c_str());
+    Client.ClientConnection.printf( "553 File %s exeeds filename length of 31 characters.\r\n", FilePath.c_str());
     return;
   }
 
-  //open file
+  if (Client.TransferFile)
+    Client.TransferFile.close();
+  
   Client.TransferFile = SPIFFS.open(FilePath, "w");
+  if (!Client.TransferFile)
+  {
+    Client.ClientConnection.printf( "452 File %s can not be opened.\r\n", FilePath.c_str());
+    return;
+  }
 
   Process_DataCommand_Responds_OK(Client, NTC_STOR);
 }
@@ -455,10 +464,28 @@ void DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
     return;
   }
 
-  //open file
-  Client.TransferFile = SPIFFS.open(FilePath, "r");
+  if (Client.TransferFile)
+    Client.TransferFile.close();
 
+  Client.TransferFile = SPIFFS.open(FilePath, "r");
+  if (!Client.TransferFile)
+  {
+    Client.ClientConnection.printf( "550 File %s can not be opened.\r\n", FilePath.c_str());
+    return;
+  }
+ 
   Process_DataCommand_Responds_OK(Client, NTC_RETR);
+}
+
+void DFC_ESP7266FtpServer::Process_ABOR(SClientInfo& Client)
+{
+  if (Client.TransferCommand != NTC_NONE)
+  {
+    Client.ClientConnection.println( "426 Connection closed; transfer aborted.");
+    Process_DataCommand_END(Client);
+  }
+  
+  Client.ClientConnection.println( "226 Transfer successful aborted.");
 }
 
 void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
@@ -509,6 +536,9 @@ void DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
   DBGLN("Data send/received. Closing data connection.");
   Client.DataConnection.flush();
   Client.DataConnection.stop();
+  
+  Client.TransferFile.close();
+  
   Client.TransferCommand = NTC_NONE;
 }
 
@@ -593,22 +623,32 @@ void DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
 
 void DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
 {
-  uint8_t Data[256];  
-  int32_t BytesRead = Client.DataConnection.read(Data, 256);
-  if (BytesRead > 0)
+  if (!Client.TransferFile)
   {
-    Client.TransferFile.write(Data, BytesRead);
+    Client.ClientConnection.println( "451 File error.");
+    Process_DataCommand_END(Client);
+    return;
   }
+  
+  uint8_t Data[FTP_DATA_BUF_SIZE];  
+  int32_t BytesRead = Client.DataConnection.read(Data, FTP_DATA_BUF_SIZE);
+  if (BytesRead > 0)
+    Client.TransferFile.write(Data, BytesRead);
 }
 
 void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
-{
-  uint8_t Data[256];
-  int32_t BytesRead = Client.TransferFile.read(Data, 256);
-  if (BytesRead > 0)
+{  
+  if (!Client.TransferFile)
   {
-    Client.DataConnection.write(Data, BytesRead);
+    Client.ClientConnection.println( "451 File error.");
+    Process_DataCommand_END(Client);
+    return;
   }
+
+  uint8_t Data[FTP_DATA_BUF_SIZE];
+  int32_t BytesRead = Client.TransferFile.read(Data, FTP_DATA_BUF_SIZE);
+  if (BytesRead > 0)
+    Client.DataConnection.write(Data, BytesRead);
   else
   {
     Process_DataCommand_END(Client);
