@@ -54,12 +54,15 @@ struct SClientInfo
 
   nTransferMode TransferMode;
   int32_t PasvListenPort;
+  bool WaitingForDataConnection;
   WiFiServer* PasvListenServer;
   WiFiClient DataConnection;
   nTransferCommand TransferCommand;
   String TempDirectory;
   File TransferFile;
-  
+  int32_t LastReceivedCommand;
+  int32_t LastReceivedData;
+ 
   void Reset()
   {
     InUse = false;
@@ -70,6 +73,7 @@ struct SClientInfo
     ControlState = NCS_START;
     TransferMode = NTM_UNKNOWN;
     PasvListenPort = 0;
+    WaitingForDataConnection = false;
     if (PasvListenServer)
     {
       PasvListenServer->close();
@@ -81,6 +85,8 @@ struct SClientInfo
     TransferCommand = NTC_NONE;
     TempDirectory = "";
     TransferFile.close();
+    LastReceivedCommand = 0;
+    LastReceivedData = 0;
   }
   SClientInfo()
   {

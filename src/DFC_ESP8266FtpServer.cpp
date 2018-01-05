@@ -9,9 +9,13 @@
 //Config defines
 #define FTP_DEBUG
 #define FTP_CONTROL_PORT        21
-#define FTP_DATA_PORT_START     20100
+#define FTP_CONTROL_TIMEOUT     60000
+#define FTP_DATA_PORT_START     22
+//#define FTP_DATA_PORT_START     20100
 #define FTP_DATA_PORT_END       20200
 #define FTP_DATA_BUF_SIZE       1000
+#define FTP_DATA_TIMEOUT        10000
+
 //debug
 #undef DBG
 #undef DBGLN
@@ -68,6 +72,7 @@ void DFC_ESP7266FtpServer::Loop()
       return;
     }
     mClientInfo[Pos].FtpState = NFS_WAITFORUSERNAME;
+    mClientInfo[Pos].LastReceivedCommand = millis();
     mClientInfo[Pos].ClientConnection.println( "220 --==[ Welcome ]==--");
   }
 
@@ -85,6 +90,18 @@ void DFC_ESP7266FtpServer::Loop_ClientConnection(SClientInfo& Client)
   //is still connected?
   if (!Client.ClientConnection.connected())
     Help_DisconnectClient(Client);
+  
+  //check for timeout on data connection
+  if (Client.TransferCommand == NTC_NONE)
+  {
+    int32 Stopwatch = millis() - Client.LastReceivedCommand;
+    if (Stopwatch > FTP_CONTROL_TIMEOUT)
+    {
+      Client.ClientConnection.println( "221- Timeout, Disconnecting.");
+      Help_DisconnectClient(Client);
+      return;
+    }
+  }
 
   //Check for new Data Connection
   if (Client.PasvListenServer && Client.PasvListenServer->hasClient())
@@ -92,6 +109,9 @@ void DFC_ESP7266FtpServer::Loop_ClientConnection(SClientInfo& Client)
     Client.DataConnection = Client.PasvListenServer->available();
     if (!Client.DataConnection.connected())
       return;
+    
+    Client.LastReceivedData = millis();
+    Client.WaitingForDataConnection = false;
 
     IPAddress Lip = Client.DataConnection.localIP();
     IPAddress Rip = Client.DataConnection.remoteIP();
@@ -177,6 +197,8 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   DBG(cmd.c_str());
   DBG(" ");
   DBGLN(Client.Arguments.c_str());
+  
+  bool Handled(true);
 
   if (cmd.equalsIgnoreCase("USER")) Process_USER(Client);
   else if (cmd.equalsIgnoreCase("PASS")) Process_PASS(Client);
@@ -185,8 +207,7 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
     DBG("Command Refused. Not logged in.");
     Client.ClientConnection.println( "530 Login needed.");
     return;
-  }    
-  
+  }
   else if (cmd.equalsIgnoreCase("QUIT")) Process_QUIT(Client);
   else if (cmd.equalsIgnoreCase("SYST")) Process_SYST(Client);
   else if (cmd.equalsIgnoreCase("FEAT")) Process_FEAT(Client);
@@ -209,6 +230,12 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   {
     Client.ClientConnection.println( "Command not known.");
     Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
+    Handled = false;
+  }
+  
+  if (Handled)
+  {
+    Client.LastReceivedCommand = millis();
   }
 }
 
@@ -483,16 +510,42 @@ void DFC_ESP7266FtpServer::Process_ABOR(SClientInfo& Client)
 
 void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
 {
-  if (Client.PasvListenServer == NULL || !Client.DataConnection.connected())
+  if (Client.PasvListenServer == NULL)
+    return;
+  
+  //425 Can't open data connection.
+  //
+  
+  if (!Client.DataConnection.connected())
   {
-    if (Client.TransferCommand != NTC_NONE)       //Client disconnected during transfer
+    if (Client.WaitingForDataConnection)
+    {
+      int32 Stopwatch = millis() - Client.LastReceivedData;
+      if (Stopwatch > FTP_DATA_TIMEOUT)
+      {
+        Client.ClientConnection.println( "425 Can't open data connection.");
+        Process_DataCommand_END(Client);
+        return;
+      }
+    }
+    else if (Client.TransferCommand != NTC_NONE)       //Client disconnected during transfer
     {
        Process_DataCommand_DISCONNECTED(Client);  //Handle disconnect event
        Process_DataCommand_END(Client);           //Close data connectin, gracefully.
     }
     return;
   }
+
+  //check for timeout on data connection
+  int32 Stopwatch = millis() - Client.LastReceivedData;
+  if (Stopwatch > FTP_DATA_TIMEOUT)
+  {
+    Client.ClientConnection.println( "426 Connection closed; transfer aborted. Timeout on data connection.");
+    Process_DataCommand_END(Client);
+    return;
+  }
   
+  //process some data for current command
   if (Client.TransferCommand == NTC_LIST) Process_Data_LIST(Client);
   else if (Client.TransferCommand == NTC_STOR) Process_Data_STOR(Client);
   else if (Client.TransferCommand == NTC_RETR) Process_Data_RETR(Client);
@@ -516,7 +569,11 @@ bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
 void DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand)
 {
   if (!Client.DataConnection.connected())
+  {
     Client.ClientConnection.println( "150 Accepted data connection.");
+    Client.WaitingForDataConnection = true;
+    Client.LastReceivedData = millis();
+  }
   else
     Client.ClientConnection.println( "125 Data connection already open; transfer starting.");
 
@@ -532,6 +589,8 @@ void DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
   
   Client.TransferFile.close();
   
+  Client.WaitingForDataConnection = false;
+  Client.LastReceivedCommand = millis(); //Transfer done. Reset timeout on client connection.
   Client.TransferCommand = NTC_NONE;
 }
 
@@ -622,11 +681,14 @@ void DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
     Process_DataCommand_END(Client);
     return;
   }
-  
+
   uint8_t Data[FTP_DATA_BUF_SIZE];  
   int32_t BytesRead = Client.DataConnection.read(Data, FTP_DATA_BUF_SIZE);
   if (BytesRead > 0)
+  {
     Client.TransferFile.write(Data, BytesRead);
+    Client.LastReceivedData = millis();
+  }
 }
 
 void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
@@ -641,7 +703,10 @@ void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
   uint8_t Data[FTP_DATA_BUF_SIZE];
   int32_t BytesRead = Client.TransferFile.read(Data, FTP_DATA_BUF_SIZE);
   if (BytesRead > 0)
+  {
     Client.DataConnection.write(Data, BytesRead);
+    Client.LastReceivedData = millis();
+  }
   else
   {
     Process_DataCommand_END(Client);
