@@ -33,14 +33,14 @@ DFC_ESP7266FtpServer::DFC_ESP7266FtpServer()
 {
 }
 
-void DFC_ESP7266FtpServer::Start()
+void DFC_ESP7266FtpServer::Init()
 {
 #if(0)
   DBGLN("=============================================");
   DBGLN("Testing");
   String ParentDir = "";
   String FilePath = "////";
-  GetParentDir(FilePath, ParentDir);
+  Help_GetParentDir(FilePath, ParentDir);
   DBGF("FilePath \"%s\"\r\n", FilePath.c_str());
   DBGF("ParentDir \"%s\"\r\n", ParentDir.c_str());
   DBGLN("=============================================");
@@ -53,7 +53,7 @@ void DFC_ESP7266FtpServer::Loop()
   if (mFtpServer.hasClient())
   {
     int32_t Pos = -1;
-    if (!GetEmptyClientInfo(Pos))
+    if (!Help_GetEmptyClientInfo(Pos))
     {
       WiFiClient OverflowClient = mFtpServer.available();
       if (!OverflowClient.connected()) //Client disconnected before we could handle
@@ -82,31 +82,16 @@ void DFC_ESP7266FtpServer::Loop()
   {
     if (mClientInfo[i].InUse)
     {
-      CheckClient(mClientInfo[i]);
+      Loop_ClientConnection(mClientInfo[i]);
     }
   }
 }
 
-bool DFC_ESP7266FtpServer::GetEmptyClientInfo(int32_t& Pos)
-{
-  for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
-  {
-    if (!mClientInfo[i].InUse)
-    {
-      Pos = i;
-      mClientInfo[i].InUse = true;
-      return true;
-    }
-  }
-
-  return false;
-}
-
-void DFC_ESP7266FtpServer::CheckClient(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Loop_ClientConnection(SClientInfo& Client)
 {
   //is still connected?
   if (!Client.ClientConnection.connected())
-    DisconnectClient(Client);
+    Help_DisconnectClient(Client);
 
   //Check for new Data Connection
   if (Client.PasvListenServer && Client.PasvListenServer->hasClient())
@@ -119,6 +104,7 @@ void DFC_ESP7266FtpServer::CheckClient(SClientInfo& Client)
     IPAddress Rip = Client.DataConnection.remoteIP();
     uint16_t Lport = Client.DataConnection.localPort();
     uint16_t Rport = Client.DataConnection.remotePort();
+    //String(Lip);
     DBG("Local:");
     DBG(Lip);
     DBG(":");
@@ -131,49 +117,11 @@ void DFC_ESP7266FtpServer::CheckClient(SClientInfo& Client)
   }
 
   //Check for new control data
-  GetControlData(Client);
-  CheckData(Client);
+  Loop_GetControlData(Client);
+  Loop_DataConnection(Client);
 }
 
-void DFC_ESP7266FtpServer::CheckData(SClientInfo& Client)
-{
-  if (Client.PasvListenServer == NULL || !Client.DataConnection.connected())
-  {
-    if (Client.TransferCommand != NTC_NONE)
-    {
-       Process_DataCommand_DISCONNECTED(Client); //Disconnect during transfer.
-       Process_DataCommand_END(Client);
-    }
-    return;
-  }
-  
-  switch (Client.TransferCommand)
-  {
-    case NTC_LIST:
-      Process_Data_LIST(Client);
-      break;
-    case NTC_STOR:
-      Process_Data_STOR(Client);
-      break;
-    case NTC_RETR:
-      Process_Data_RETR(Client);
-      break;
-
-    default:
-      return;
-      break;
-  }
-}
-
-void DFC_ESP7266FtpServer::DisconnectClient(SClientInfo& Client)
-{
-  if (Client.ClientConnection.connected())
-    Client.ClientConnection.println("221 Goodbye");
-
-  Client.Reset();
-}
-
-void DFC_ESP7266FtpServer::GetControlData(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Loop_GetControlData(SClientInfo& Client)
 {
   while(1)
   {
@@ -187,7 +135,7 @@ void DFC_ESP7266FtpServer::GetControlData(SClientInfo& Client)
       if (Client.ControlState == NCS_START) //initial spaces
         continue;
 
-      ProcessCommand(Client);
+      Loop_ProcessCommand(Client);
       Client.Arguments = "";
       Client.ControlState = NCS_START;
       continue;
@@ -225,138 +173,7 @@ void DFC_ESP7266FtpServer::GetControlData(SClientInfo& Client)
   }
 }
 
-String DFC_ESP7266FtpServer::GetFirstArgument(SClientInfo& Client)
-{
-  int32_t Start = 0;
-  int32_t End = Client.Arguments.length();
-  for (int32_t i = End-1; i>= 0; i--)
-  {
-    if (Client.Arguments.charAt(i) == ' ')
-      End = i;
-  }
-
-  return Client.Arguments.substring(Start, End);
-}
-
-String DFC_ESP7266FtpServer::ConstructPath(SClientInfo& Client, bool IsPath)
-{
-  String Path = GetFirstArgument(Client);
-  Path.replace("\\", "/");
-
-  if (Path.length() == 0)
-    Path = "/";
-  else if (!Path.startsWith("/")) //its a absolute path
-    Path = Client.CurrentPath + Path;
-
-  if (IsPath)
-    Path += "/";
- 
-  while (Path.indexOf("//") >= 0)
-    Path.replace("//", "/");
-
-  return Path;
-}
-
-// return false if filepath is not in current dir
-// Stores the filename or subdirectory in FileName.
-bool DFC_ESP7266FtpServer::GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir)
-{
-  int32_t FilePathSize = FilePath.length();
-  int32_t CurrentDirSize = CurrentDir.length();
-
-  if (FilePathSize <= CurrentDirSize)
-    return false;
-
-  if (FilePath.indexOf(CurrentDir) != 0)
-    return false;
-
-  int32_t NextSlash = FilePath.indexOf('/', CurrentDirSize);
-
-  //Check if there's more after the slash.
-  //but if it's ends on a slash it's still a file with it's name ending on a /
-  //That's SPIFFS specific, since it does not has directories.
-  if (NextSlash < 0 || FilePathSize == NextSlash+1)
-  {
-    FileName = FilePath.substring(CurrentDirSize);
-    IsDir = false;
-  }
-  else
-  {
-    FileName = FilePath.substring(CurrentDirSize, NextSlash);
-    IsDir = true;
-  }
-
-  return true;
-}
-
-bool DFC_ESP7266FtpServer::GetParentDir(String FilePath, String& ParentDir)
-{
-  String Path = FilePath;
-  Path.replace("\\", "/");
-  while (Path.indexOf("//") >= 0)
-    Path.replace("//", "/");
-
-  if (Path.endsWith("/"))
-    Path.remove(Path.length()-1);
-
-  int32_t Pos = -1;
-  int32_t LastSlash = Path.indexOf('/');
-  while (LastSlash >= 0)
-  {
-    DBGF("LastSlash \"%d\"\r\n", LastSlash);
-    Pos = LastSlash;
-    LastSlash = Path.indexOf('/', LastSlash+1);
-  }
-
-  if (Pos < 0)
-  {
-    ParentDir = FilePath;
-    return false;
-  }
-
-  ParentDir = FilePath.substring(0, Pos+1);
-  return true;
-}
-
-//If directory exist, it's automatically not emtpy, because Empty directories do not exist.
-//DirPath needs to be absolute
-bool DFC_ESP7266FtpServer::ExistDir(String DirPath)
-{
-  Dir FindDir = SPIFFS.openDir("/");
-  while (FindDir.next())
-  {
-    String FilePath = FindDir.fileName();
-    if (FilePath.indexOf(DirPath) == 0 && FilePath.length() > DirPath.length())
-      return true;
-  }  
-  return false;
-}
-
-int32_t DFC_ESP7266FtpServer::GetNextDataPort()
-{
-  int32_t NewPort = mLastDataPort;
-  while (1)
-  {
-    NewPort++;
-    if (NewPort >= FTP_DATA_PORT_END)
-      NewPort = FTP_DATA_PORT_START;
-
-    bool PortInUse = false;
-    for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
-    {
-      if (mClientInfo[i].InUse && mClientInfo[i].PasvListenPort == NewPort)
-        PortInUse = true;
-    }
-
-    if (!PortInUse)
-      return NewPort;
-
-    if (NewPort == mLastDataPort) //all possible ports are in use
-     return 0;
-  }
-}
-
-void DFC_ESP7266FtpServer::ProcessCommand(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
 {
   //preprocess
   Client.Command.trim();
@@ -452,7 +269,7 @@ void DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
   if (Client.FtpState == NFS_WAITFORPASSWORD_USER_REJECTED || !mServerPassword.equals(Client.Arguments))
   {
     Client.ClientConnection.println( "530 Username/Password wrong.");
-    DisconnectClient(Client);
+    Help_DisconnectClient(Client);
     return;
   }
 
@@ -462,7 +279,7 @@ void DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
 
 void DFC_ESP7266FtpServer::Process_QUIT(SClientInfo& Client)
 {
-  DisconnectClient(Client);
+  Help_DisconnectClient(Client);
 }
 
 void DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
@@ -489,7 +306,7 @@ void DFC_ESP7266FtpServer::Process_PWD(SClientInfo& Client)
 void DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
 {
   String NewPath;
-  GetParentDir(Client.CurrentPath, NewPath);
+  Help_GetParentDir(Client.CurrentPath, NewPath);
 
   Client.CurrentPath = NewPath;
   Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
@@ -499,7 +316,7 @@ void DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
 //dir that does not "exists".
 void DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 {
-  String NewPath = ConstructPath(Client, true);
+  String NewPath = Help_GetPath(Client, true);
 
   Client.CurrentPath = NewPath;
   Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
@@ -508,7 +325,7 @@ void DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 
 void DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 {
-  Client.TempDirectory = ConstructPath(Client, true);
+  Client.TempDirectory = Help_GetPath(Client, true);
   Client.ClientConnection.printf( "257 \"%s\" is created.\n\r", Client.TempDirectory.c_str());
 }
 
@@ -516,8 +333,8 @@ void DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 //files are removed, directorie is removed automatically
 void DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
 {
-  String Directory = ConstructPath(Client, true);
-  if (ExistDir(Directory))
+  String Directory = Help_GetPath(Client, true);
+  if (Help_DirExist(Directory))
   {
     Client.ClientConnection.printf( "550 Directory \"%s\" not removed. It's not empty.\n\r", Directory.c_str());
     return;
@@ -546,7 +363,7 @@ void DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
   IPAddress LocalIP = Client.ClientConnection.localIP();
   if (Client.PasvListenServer == NULL)
   {
-    Client.PasvListenPort = 20; //GetNextDataPort();
+    Client.PasvListenPort = Help_GetNextDataPort();
     Client.PasvListenServer = new WiFiServer(Client.PasvListenPort);
     Client.PasvListenServer->begin();
   }
@@ -574,7 +391,7 @@ void DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
 void DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
 {
   //check filename
-  String FilePath = ConstructPath(Client, false);
+  String FilePath = Help_GetPath(Client, false);
   if (!SPIFFS.exists(FilePath))
   {
     Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
@@ -595,7 +412,7 @@ void DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
 void DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
 {
   //check filename
-  String FilePath = ConstructPath(Client, false);
+  String FilePath = Help_GetPath(Client, false);
   if (!SPIFFS.exists(FilePath))
   {
     Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
@@ -612,7 +429,7 @@ void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
     return;
 
   //check filename
-  String FilePath = ConstructPath(Client, false);
+  String FilePath = Help_GetPath(Client, false);
   if (FilePath.length() > 31)
   {
     Client.ClientConnection.printf( "550 File %s exeeds filename length of 31 characters.\r\n", FilePath.c_str());
@@ -631,7 +448,7 @@ void DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
     return;
 
   //check filename
-  String FilePath = ConstructPath(Client, false);
+  String FilePath = Help_GetPath(Client, false);
   if (!SPIFFS.exists(FilePath))
   {
     Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
@@ -642,6 +459,23 @@ void DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
   Client.TransferFile = SPIFFS.open(FilePath, "r");
 
   Process_DataCommand_Responds_OK(Client, NTC_RETR);
+}
+
+void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
+{
+  if (Client.PasvListenServer == NULL || !Client.DataConnection.connected())
+  {
+    if (Client.TransferCommand != NTC_NONE)       //Client disconnected during transfer
+    {
+       Process_DataCommand_DISCONNECTED(Client);  //Handle disconnect event
+       Process_DataCommand_END(Client);           //Close data connectin, gracefully.
+    }
+    return;
+  }
+  
+  if (Client.TransferCommand == NTC_LIST) Process_Data_LIST(Client);
+  else if (Client.TransferCommand == NTC_STOR) Process_Data_STOR(Client);
+  else if (Client.TransferCommand == NTC_RETR) Process_Data_RETR(Client);
 }
 
 bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
@@ -667,7 +501,7 @@ void DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, 
     Client.ClientConnection.println( "125 Data connection already open; transfer starting.");
 
   Client.TransferCommand = TransferCommand;
-  CheckData(Client);
+  Loop_DataConnection(Client);
 }
 
 void DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
@@ -685,7 +519,7 @@ void DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
     //Data connection lost before we send all data. It's a abort
     case NTC_LIST:
     case NTC_RETR:
-      Client.ClientConnection.println( "426 Connection closed; transfer aborted.");
+      Client.ClientConnection.println( "426 Data connection unexpectacly disconnected. transfer aborted.");
       break;
 
     //Data connection disconnected during receiving data.
@@ -695,25 +529,6 @@ void DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
       Client.ClientConnection.println( "226 Connection closed; transfer successful.");
       break;
   }
-}
-
-//creates a list with unique names. If a name is already present in list,
-//it returns false.
-bool DFC_ESP7266FtpServer::CheckIfPresentList(std::vector<String>& DirList, const String& Name)
-{
-  bool Found(false);
-  for (std::vector<String>::iterator it=DirList.begin(); it!=DirList.end(); it++)
-  {
-    if (Name.equals(*it))
-      Found = true;
-  }
-
-  if (!Found)
-  {
-    DirList.push_back(Name);
-  }
-  
-  return !Found;
 }
 
 ////                               0         1         2         3         4         5          
@@ -732,11 +547,11 @@ void DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
   while (dir.next())
   {
     String FilePath = dir.fileName();
-    if (GetFileName(Client.CurrentPath, FilePath, FileName, IsDir))
+    if (Help_GetFileName(Client.CurrentPath, FilePath, FileName, IsDir))
     {
       if (IsDir)
       {
-        if (CheckIfPresentList(DirList, FileName))
+        if (Help_CheckIfDirIsUnique(DirList, FileName))
         {
           Client.DataConnection.print("drw-rw-rw-    1 0        0               0 Jan 01  1970 ");
           Client.DataConnection.println(FileName);
@@ -759,13 +574,13 @@ void DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
   }
   
   //Append the TempDirectory created at MKD if we need to add it.
-  //GetFileName wil report it's a file, but we are sure it's a directory.
+  //Help_GetFileName wil report it's a file, but we are sure it's a directory.
   //we ignore IsDir.
-  if (GetFileName(Client.CurrentPath, Client.TempDirectory, FileName, IsDir))
+  if (Help_GetFileName(Client.CurrentPath, Client.TempDirectory, FileName, IsDir))
   {
     if (FileName.endsWith("/"))
       FileName.remove(FileName.length()-1);
-    if (CheckIfPresentList(DirList, FileName))
+    if (Help_CheckIfDirIsUnique(DirList, FileName))
     {
       Client.DataConnection.print("drw-rw-rw-    1 0        0               0 Jan 01  1970 ");
       Client.DataConnection.println(FileName);
@@ -799,4 +614,186 @@ void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
     Process_DataCommand_END(Client);
     Client.ClientConnection.println( "226 File transfer done.");
   }
+}
+
+bool DFC_ESP7266FtpServer::Help_GetEmptyClientInfo(int32_t& Pos)
+{
+  for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
+  {
+    if (!mClientInfo[i].InUse)
+    {
+      Pos = i;
+      mClientInfo[i].InUse = true;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+int32_t DFC_ESP7266FtpServer::Help_GetNextDataPort()
+{
+  int32_t NewPort = mLastDataPort;
+  while (1)
+  {
+    NewPort++;
+    if (NewPort >= FTP_DATA_PORT_END)
+      NewPort = FTP_DATA_PORT_START;
+
+    bool PortInUse = false;
+    for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
+    {
+      if (mClientInfo[i].InUse && mClientInfo[i].PasvListenPort == NewPort)
+        PortInUse = true;
+    }
+
+    if (!PortInUse)
+      return NewPort;
+
+    if (NewPort == mLastDataPort) //all possible ports are in use
+     return 0;
+  }
+}
+
+void DFC_ESP7266FtpServer::Help_DisconnectClient(SClientInfo& Client)
+{
+  if (Client.ClientConnection.connected())
+    Client.ClientConnection.println("221 Goodbye");
+
+  Client.Reset();
+}
+
+String DFC_ESP7266FtpServer::Help_GetFirstArgument(SClientInfo& Client)
+{
+  int32_t Start = 0;
+  int32_t End = Client.Arguments.length();
+  for (int32_t i = End-1; i>= 0; i--)
+  {
+    if (Client.Arguments.charAt(i) == ' ')
+      End = i;
+  }
+
+  return Client.Arguments.substring(Start, End);
+}
+
+String DFC_ESP7266FtpServer::Help_GetPath(SClientInfo& Client, bool IsPath)
+{
+  String Path = Help_GetFirstArgument(Client);
+  Path.replace("\\", "/");
+
+  if (Path.length() == 0)
+    Path = "/";
+  else if (!Path.startsWith("/")) //its a absolute path
+    Path = Client.CurrentPath + Path;
+
+  if (IsPath)
+    Path += "/";
+ 
+  while (Path.indexOf("//") >= 0)
+    Path.replace("//", "/");
+
+  return Path;
+}
+
+/* Help_GetFileName
+
+Input values
+  CurrentDir : Full path of current directory to find files in.
+  FilePath   : Full path of file to get name from.
+
+output values
+  FileName : Name of file or subdirectory. without path
+  IsDir    : If FileName is a subdirectory (or an file)
+
+Return value
+  true  : Name found
+  false : FilePath is file or subdirectory in CurrentDir
+*/
+bool DFC_ESP7266FtpServer::Help_GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir)
+{
+  int32_t FilePathSize = FilePath.length();
+  int32_t CurrentDirSize = CurrentDir.length();
+
+  if (FilePathSize <= CurrentDirSize)
+    return false;
+
+  if (FilePath.indexOf(CurrentDir) != 0)
+    return false;
+
+  int32_t NextSlash = FilePath.indexOf('/', CurrentDirSize);
+
+  if (NextSlash < 0 || FilePathSize == NextSlash+1) //+1 is correct. We want the '/' if FILENAME ends with a '/'. 
+  {
+    FileName = FilePath.substring(CurrentDirSize);
+    IsDir = false;
+  }
+  else
+  {
+    FileName = FilePath.substring(CurrentDirSize, NextSlash);
+    IsDir = true;
+  }
+
+  return true;
+}
+
+bool DFC_ESP7266FtpServer::Help_GetParentDir(String FilePath, String& ParentDir)
+{
+  String Path = FilePath;
+  Path.replace("\\", "/");
+  while (Path.indexOf("//") >= 0)
+    Path.replace("//", "/");
+
+  if (Path.endsWith("/"))
+    Path.remove(Path.length()-1);
+
+  int32_t Pos = -1;
+  int32_t LastSlash = Path.indexOf('/');
+  while (LastSlash >= 0)
+  {
+    DBGF("LastSlash \"%d\"\r\n", LastSlash);
+    Pos = LastSlash;
+    LastSlash = Path.indexOf('/', LastSlash+1);
+  }
+
+  if (Pos < 0)
+  {
+    ParentDir = FilePath;
+    return false;
+  }
+
+  ParentDir = FilePath.substring(0, Pos+1);
+  return true;
+}
+
+//If directory exist, it's automatically not emtpy, because Empty directories do not exist.
+//DirPath needs to be absolute
+bool DFC_ESP7266FtpServer::Help_DirExist(String DirPath)
+{
+  Dir FindDir = SPIFFS.openDir("/");
+  while (FindDir.next())
+  {
+    String FilePath = FindDir.fileName();
+    if (FilePath.indexOf(DirPath) == 0 && FilePath.length() > DirPath.length())
+      return true;
+  }  
+  return false;
+}
+
+//creates a list with unique names. If a name is already present in list,
+//it returns false.
+bool DFC_ESP7266FtpServer::Help_CheckIfDirIsUnique(std::vector<String>& DirList, const String& Name)
+{
+  bool Found(false);
+  for (std::vector<String>::iterator it=DirList.begin(); it!=DirList.end(); it++)
+  {
+    if (Name.equals(*it))
+      Found = true;
+  }
+
+  if (!Found)
+  {
+    DirList.push_back(Name);
+  }
+  
+  return !Found;
 }
