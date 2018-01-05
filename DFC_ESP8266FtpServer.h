@@ -10,6 +10,7 @@
 //Includes
 #include <vector>
 #include <ESP8266WiFi.h>
+#include <fs.h>
 
 enum nFtpState
 {
@@ -61,6 +62,7 @@ struct SClientInfo
   WiFiClient DataConnection;
   nTransferCommand TransferCommand;
   String TempDirectory;
+  File TransferFile;
   
   void Reset()
   {
@@ -82,6 +84,7 @@ struct SClientInfo
     DataConnection.stop();
     TransferCommand = NTC_NONE;
     TempDirectory = "";
+    TransferFile.close();
   }
   SClientInfo()
   {
@@ -106,9 +109,11 @@ protected: //Help functions
   void      DisconnectClient(SClientInfo& Client);
   void      GetControlData(SClientInfo& Client);
   String    GetFirstArgument(SClientInfo& Client);
-  String    ConstructPath(SClientInfo& Client);
+  String    ConstructPath(SClientInfo& Client, bool IsPath);
   bool      GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir);
   bool      GetParentDir(String FilePath, String& ParentDir);
+  bool      ExistDir(String FilePath);
+
   int32_t   GetNextDataPort();
   bool      CheckIfPresentList(std::vector<String>& DirList, const String& Name);
 
@@ -128,10 +133,14 @@ protected: //Help functions
   bool      Process_PASV(SClientInfo& Client);
   bool      Process_PORT(SClientInfo& Client);
   bool      Process_LIST(SClientInfo& Client);
+  bool      Process_SIZE(SClientInfo& Client);
+  bool      Process_DELE(SClientInfo& Client);
   bool      Process_STOR(SClientInfo& Client);
   bool      Process_RETR(SClientInfo& Client);
   bool      Process_DataCommand_Preprocess(SClientInfo& Client);
   bool      Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand);
+  bool      Process_DataCommand_END(SClientInfo& Client);
+  bool      Process_DataCommand_DISCONNECTED(SClientInfo& Client);
   bool      Process_Data_LIST(SClientInfo& Client);
   bool      Process_Data_STOR(SClientInfo& Client);
   bool      Process_Data_RETR(SClientInfo& Client);

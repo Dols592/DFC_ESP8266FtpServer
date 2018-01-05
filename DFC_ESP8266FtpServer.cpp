@@ -138,8 +138,15 @@ void DFC_ESP7266FtpServer::CheckClient(SClientInfo& Client)
 void DFC_ESP7266FtpServer::CheckData(SClientInfo& Client)
 {
   if (Client.PasvListenServer == NULL || !Client.DataConnection.connected())
+  {
+    if (Client.TransferCommand != NTC_NONE)
+    {
+       Process_DataCommand_DISCONNECTED(Client); //Disconnect during transfer.
+       Process_DataCommand_END(Client);
+    }
     return;
-
+  }
+  
   switch (Client.TransferCommand)
   {
     case NTC_LIST:
@@ -231,17 +238,19 @@ String DFC_ESP7266FtpServer::GetFirstArgument(SClientInfo& Client)
   return Client.Arguments.substring(Start, End);
 }
 
-String DFC_ESP7266FtpServer::ConstructPath(SClientInfo& Client)
+String DFC_ESP7266FtpServer::ConstructPath(SClientInfo& Client, bool IsPath)
 {
   String Path = GetFirstArgument(Client);
   Path.replace("\\", "/");
 
-  if (Client.Arguments.length() == 0)
+  if (Path.length() == 0)
     Path = "/";
-  else if (!Client.Arguments.startsWith("/")) //its a absolute path
+  else if (!Path.startsWith("/")) //its a absolute path
     Path = Client.CurrentPath + Path;
 
-  Path += "/";
+  if (IsPath)
+    Path += "/";
+ 
   while (Path.indexOf("//") >= 0)
     Path.replace("//", "/");
 
@@ -309,6 +318,20 @@ bool DFC_ESP7266FtpServer::GetParentDir(String FilePath, String& ParentDir)
   return true;
 }
 
+//If directory exist, it's automatically not emtpy, because Empty directories do not exist.
+//DirPath needs to be absolute
+bool DFC_ESP7266FtpServer::ExistDir(String DirPath)
+{
+  Dir FindDir = SPIFFS.openDir("/");
+  while (FindDir.next())
+  {
+    String FilePath = FindDir.fileName();
+    if (FilePath.indexOf(DirPath) == 0 && FilePath.length() > DirPath.length())
+      return true;
+  }  
+  return false;
+}
+
 int32_t DFC_ESP7266FtpServer::GetNextDataPort()
 {
   int32_t NewPort = mLastDataPort;
@@ -367,6 +390,8 @@ void DFC_ESP7266FtpServer::ProcessCommand(SClientInfo& Client)
   if (cmd.equalsIgnoreCase("PASV") && Process_PASV(Client)) return;
   if (cmd.equalsIgnoreCase("PORT") && Process_PORT(Client)) return;
   if (cmd.equalsIgnoreCase("LIST") && Process_LIST(Client)) return;
+  if (cmd.equalsIgnoreCase("SIZE") && Process_SIZE(Client)) return;
+  if (cmd.equalsIgnoreCase("DELE") && Process_DELE(Client)) return;
   if (cmd.equalsIgnoreCase("STOR") && Process_STOR(Client)) return;
   if (cmd.equalsIgnoreCase("RETR") && Process_RETR(Client)) return;
 
@@ -481,7 +506,7 @@ bool DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
 //dir that does not "exists".
 bool DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 {
-  String NewPath = ConstructPath(Client);
+  String NewPath = ConstructPath(Client, true);
 
   Client.CurrentPath = NewPath;
   Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
@@ -491,7 +516,7 @@ bool DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 
 bool DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 {
-  Client.TempDirectory = ConstructPath(Client);
+  Client.TempDirectory = ConstructPath(Client, true);
   Client.ClientConnection.printf( "257 \"%s\" is created.\n\r", Client.TempDirectory.c_str());
 
   return true;
@@ -501,7 +526,17 @@ bool DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 //files are removed, directorie is removed automatically
 bool DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
 {
-  Client.ClientConnection.println( "550 Directories can not be removed. It is removed automatically when it's empty.");
+  String Directory = ConstructPath(Client, true);
+  if (ExistDir(Directory))
+  {
+    Client.ClientConnection.printf( "550 Directory \"%s\" not removed. It's not empty.\n\r", Directory.c_str());
+    return true;
+  }
+
+  if (Client.TempDirectory.indexOf(Directory) == 0)
+    Client.TempDirectory = "";
+
+  Client.ClientConnection.printf( "250 Directory \"%s\" is removed.\n\r", Directory.c_str());
 
   return true;
 }
@@ -547,8 +582,49 @@ bool DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
   if (!Process_DataCommand_Preprocess(Client))
     return true;
   
+  //Other check's and preprocessing
+  
   Process_DataCommand_Responds_OK(Client, NTC_LIST);
   return true;  
+}
+
+bool DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
+{
+  //check filename
+  String FilePath = ConstructPath(Client, false);
+  if (!SPIFFS.exists(FilePath))
+  {
+    Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
+    return true;
+  }
+  
+  File FileHandle = SPIFFS.open(FilePath, "r");
+  if (!FileHandle)
+  {
+    Client.ClientConnection.printf( "550 File %s could not be opened.\r\n", FilePath.c_str());
+    return true;
+
+  }
+  
+  Client.ClientConnection.println( "213 " + String(FileHandle.size()));
+  FileHandle.close();
+
+  return true;
+}
+
+bool DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
+{
+  //check filename
+  String FilePath = ConstructPath(Client, false);
+  if (!SPIFFS.exists(FilePath))
+  {
+    Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
+    return true;
+  }
+
+  SPIFFS.remove(FilePath);
+    Client.ClientConnection.printf( "250 File %s successful deleted.\r\n", FilePath.c_str());
+  return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
@@ -557,9 +633,16 @@ bool DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
     return true;
 
   //check filename
-  
+  String FilePath = ConstructPath(Client, false);
+  if (FilePath.length() > 31)
+  {
+    Client.ClientConnection.printf( "550 File %s exeeds filename length of 31 characters.\r\n", FilePath.c_str());
+    return true;
+  }
+
   //open file
-  
+  Client.TransferFile = SPIFFS.open(FilePath, "w");
+
   Process_DataCommand_Responds_OK(Client, NTC_STOR);
   return true;
 }
@@ -569,8 +652,19 @@ bool DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
   if (!Process_DataCommand_Preprocess(Client))
     return true;
 
+  //check filename
+  String FilePath = ConstructPath(Client, false);
+  if (!SPIFFS.exists(FilePath))
+  {
+    Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
+    return true;
+  }
+
+  //open file
+  Client.TransferFile = SPIFFS.open(FilePath, "r");
+
   Process_DataCommand_Responds_OK(Client, NTC_RETR);
-  return false;
+  return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
@@ -603,6 +697,33 @@ bool DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, 
   Client.TransferCommand = TransferCommand;
   CheckData(Client);
   return true;
+}
+
+bool DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
+{
+  DBGLN("Data send/received. Closing data connection.");
+  Client.DataConnection.flush();
+  Client.DataConnection.stop();
+  Client.TransferCommand = NTC_NONE;
+}
+
+bool DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
+{
+  switch (Client.TransferCommand)
+  {
+    //Data connection lost before we send all data. It's a abort
+    case NTC_LIST:
+    case NTC_RETR:
+      Client.ClientConnection.println( "426 Connection closed; transfer aborted.");
+      break;
+
+    //Data connection disconnected during receiving data.
+    //Implicit this is a signal all data is send from client.
+    //So it is a successfull transfer.
+    case NTC_STOR:
+      Client.ClientConnection.println( "226 Connection closed; transfer successful.");
+      break;
+  }
 }
 
 //creates a list with unique names. If a name is already present in list,
@@ -671,6 +792,8 @@ bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
   //we ignore IsDir.
   if (GetFileName(Client.CurrentPath, Client.TempDirectory, FileName, IsDir))
   {
+    if (FileName.endsWith("/"))
+      FileName.remove(FileName.length()-1);
     if (CheckIfPresentList(DirList, FileName))
     {
       Client.DataConnection.print("drw-rw-rw-    1 0        0               0 Jan 01  1970 ");
@@ -679,22 +802,33 @@ bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
   }
 
   Client.ClientConnection.println( "226 File listing send.");
-  
-  DBGLN("Data send. Closing data connection.");
-  Client.DataConnection.flush();
-  Client.DataConnection.stop();
-  Client.TransferCommand = NTC_NONE;
-
+  Process_DataCommand_END(Client);
   return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
 {
+  uint8_t Data[256];  
+  int32_t BytesRead = Client.DataConnection.read(Data, 256);
+  if (BytesRead > 0)
+  {
+    Client.TransferFile.write(Data, BytesRead);
+  }
   return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
 {
+  uint8_t Data[256];
+  int32_t BytesRead = Client.TransferFile.read(Data, 256);
+  if (BytesRead > 0)
+  {
+    Client.DataConnection.write(Data, BytesRead);
+  }
+  else
+  {
+    Process_DataCommand_END(Client);
+    Client.ClientConnection.println( "226 File transfer done.");
+  }
   return true;
 }
-
