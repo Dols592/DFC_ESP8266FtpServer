@@ -368,43 +368,45 @@ void DFC_ESP7266FtpServer::ProcessCommand(SClientInfo& Client)
   DBG(" ");
   DBGLN(Client.Arguments.c_str());
 
-  if (cmd.equalsIgnoreCase("USER") && Process_USER(Client)) return;
-  if (cmd.equalsIgnoreCase("PASS") && Process_PASS(Client)) return;
-  if (Client.FtpState < NFS_WAITFORCOMMAND)
+  if (cmd.equalsIgnoreCase("USER")) Process_USER(Client);
+  else if (cmd.equalsIgnoreCase("PASS")) Process_PASS(Client);
+  else if (Client.FtpState < NFS_WAITFORCOMMAND)
   {
     DBG("Command Refused. Not logged in.");
     Client.ClientConnection.println( "530 Login needed.");
     return;
+  }    
+  
+  else if (cmd.equalsIgnoreCase("QUIT")) Process_QUIT(Client);
+  else if (cmd.equalsIgnoreCase("SYST")) Process_SYST(Client);
+  else if (cmd.equalsIgnoreCase("FEAT")) Process_FEAT(Client);
+  else if (cmd.equalsIgnoreCase("HELP")) Process_HELP(Client);
+  else if (cmd.equalsIgnoreCase("PWD")) Process_PWD(Client);
+  else if (cmd.equalsIgnoreCase("CDUP")) Process_CDUP(Client);
+  else if (cmd.equalsIgnoreCase("CWD")) Process_CWD(Client);
+  else if (cmd.equalsIgnoreCase("MKD")) Process_MKD(Client);
+  else if (cmd.equalsIgnoreCase("RMD")) Process_RMD(Client);
+  else if (cmd.equalsIgnoreCase("TYPE")) Process_TYPE(Client);
+  else if (cmd.equalsIgnoreCase("PASV")) Process_PASV(Client);
+  else if (cmd.equalsIgnoreCase("PORT")) Process_PORT(Client);
+  else if (cmd.equalsIgnoreCase("LIST")) Process_LIST(Client);
+  else if (cmd.equalsIgnoreCase("SIZE")) Process_SIZE(Client);
+  else if (cmd.equalsIgnoreCase("DELE")) Process_DELE(Client);
+  else if (cmd.equalsIgnoreCase("STOR")) Process_STOR(Client);
+  else if (cmd.equalsIgnoreCase("RETR")) Process_RETR(Client);
+  else
+  {
+    Client.ClientConnection.println( "Command not known.");
+    Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
   }
-
-  if (cmd.equalsIgnoreCase("QUIT") && Process_QUIT(Client)) return;
-  if (cmd.equalsIgnoreCase("SYST") && Process_SYST(Client)) return;
-  if (cmd.equalsIgnoreCase("FEAT") && Process_FEAT(Client)) return;
-  if (cmd.equalsIgnoreCase("HELP") && Process_HELP(Client)) return;
-  if (cmd.equalsIgnoreCase("PWD") && Process_PWD(Client)) return;
-  if (cmd.equalsIgnoreCase("CDUP") && Process_CDUP(Client)) return;
-  if (cmd.equalsIgnoreCase("CWD") && Process_CWD(Client)) return;
-  if (cmd.equalsIgnoreCase("MKD") && Process_MKD(Client)) return;
-  if (cmd.equalsIgnoreCase("RMD") && Process_RMD(Client)) return;
-  if (cmd.equalsIgnoreCase("TYPE") && Process_TYPE(Client)) return;
-  if (cmd.equalsIgnoreCase("PASV") && Process_PASV(Client)) return;
-  if (cmd.equalsIgnoreCase("PORT") && Process_PORT(Client)) return;
-  if (cmd.equalsIgnoreCase("LIST") && Process_LIST(Client)) return;
-  if (cmd.equalsIgnoreCase("SIZE") && Process_SIZE(Client)) return;
-  if (cmd.equalsIgnoreCase("DELE") && Process_DELE(Client)) return;
-  if (cmd.equalsIgnoreCase("STOR") && Process_STOR(Client)) return;
-  if (cmd.equalsIgnoreCase("RETR") && Process_RETR(Client)) return;
-
-  Client.ClientConnection.println( "Command not known.");
-  Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
 }
 
-bool DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
 {
   if (Client.FtpState > NFS_WAITFORPASSWORD)
   {
     Client.ClientConnection.println( "530 Changing user is not allowed.");
-    return true;
+    return;
   }
 
   //check if user exists
@@ -419,129 +421,115 @@ bool DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
   {
     Client.ClientConnection.println( "331 OK. Password required");
     Client.FtpState = NFS_WAITFORPASSWORD_USER_REJECTED;
-    return true;
+    return;
   }
 
   if (mServerPassword.length() == 0) //we don't need a password
   {
     Client.ClientConnection.println( "230 OK.");
     Client.FtpState = NFS_WAITFORCOMMAND;
-    return true;
   }
   else
   {
     Client.ClientConnection.println( "331 OK. Password required");
     Client.FtpState = NFS_WAITFORPASSWORD;
-    return true;
   }
 }
 
-bool DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
 {
   if (Client.FtpState <= NFS_WAITFORUSERNAME)
   {
     Client.ClientConnection.println( "503 Login with USER first.");
-    return true;
+    return;
   }
   if (Client.FtpState > NFS_WAITFORPASSWORD)
   {
     Client.ClientConnection.println( "230 Already logged in.");
-    return true;
+    return;
   }
 
   if (Client.FtpState == NFS_WAITFORPASSWORD_USER_REJECTED || !mServerPassword.equals(Client.Arguments))
   {
     Client.ClientConnection.println( "530 Username/Password wrong.");
     DisconnectClient(Client);
-    return true;
+    return;
   }
 
   Client.ClientConnection.println( "230 Logged in.");
   Client.FtpState = NFS_WAITFORCOMMAND;
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_QUIT(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_QUIT(SClientInfo& Client)
 {
   DisconnectClient(Client);
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
 {
   Client.ClientConnection.println( "215 UNIX esp8266.");
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_FEAT(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_FEAT(SClientInfo& Client)
 {
   Client.ClientConnection.println( "211 No Features.");
-  return true;
 }
 
 
-bool DFC_ESP7266FtpServer::Process_HELP(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_HELP(SClientInfo& Client)
 {
   Client.ClientConnection.println( "214 Ask the whizzkid for help.");
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_PWD(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_PWD(SClientInfo& Client)
 {
   Client.ClientConnection.printf( "257 \"%s\" Current Directory.\r\n", Client.CurrentPath.c_str());
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
 {
   String NewPath;
   GetParentDir(Client.CurrentPath, NewPath);
 
   Client.CurrentPath = NewPath;
   Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
-  return true;
 }
 
 //Because directories are simulated, we accept CWD to
 //dir that does not "exists".
-bool DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
 {
   String NewPath = ConstructPath(Client, true);
 
   Client.CurrentPath = NewPath;
   Client.ClientConnection.printf( "250 Directory successfully changed.\r\n");
   DBGLN("New Directory: " + NewPath);
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 {
   Client.TempDirectory = ConstructPath(Client, true);
   Client.ClientConnection.printf( "257 \"%s\" is created.\n\r", Client.TempDirectory.c_str());
-
-  return true;
 }
 
 //we never accept directory removal. If all
 //files are removed, directorie is removed automatically
-bool DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
 {
   String Directory = ConstructPath(Client, true);
   if (ExistDir(Directory))
   {
     Client.ClientConnection.printf( "550 Directory \"%s\" not removed. It's not empty.\n\r", Directory.c_str());
-    return true;
+    return;
   }
 
   if (Client.TempDirectory.indexOf(Directory) == 0)
     Client.TempDirectory = "";
 
   Client.ClientConnection.printf( "250 Directory \"%s\" is removed.\n\r", Directory.c_str());
-
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
 {
   const String& arg(Client.Arguments); //for easy access
 
@@ -551,11 +539,9 @@ bool DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
     Client.ClientConnection.println( "200 TYPE is now 8-bit binary.");
   else
     Client.ClientConnection.println( "504 Unknow TYPE.");
-
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
 {
   IPAddress LocalIP = Client.ClientConnection.localIP();
   if (Client.PasvListenServer == NULL)
@@ -568,103 +554,94 @@ bool DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
   int32_t PasvPort = Client.PasvListenPort;
   Client.ClientConnection.println( "227 Entering Passive Mode ("+ String(LocalIP[0]) + "," + String(LocalIP[1])+","+ String(LocalIP[2])+","+ String(LocalIP[3])+","+String( PasvPort >> 8 ) +","+String ( PasvPort & 255 )+").");
   Client.TransferMode = NTC_PASSIVE;
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_PORT(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_PORT(SClientInfo& Client)
 {
   //Client.TransferMode = NTC_ACTIVE;
-  return false;
 }
 
-bool DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
 {
   if (!Process_DataCommand_Preprocess(Client))
-    return true;
+    return;
   
   //Other check's and preprocessing
   
   Process_DataCommand_Responds_OK(Client, NTC_LIST);
-  return true;  
 }
 
-bool DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
 {
   //check filename
   String FilePath = ConstructPath(Client, false);
   if (!SPIFFS.exists(FilePath))
   {
     Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
-    return true;
+    return;
   }
   
   File FileHandle = SPIFFS.open(FilePath, "r");
   if (!FileHandle)
   {
     Client.ClientConnection.printf( "550 File %s could not be opened.\r\n", FilePath.c_str());
-    return true;
-
+    return;
   }
   
   Client.ClientConnection.println( "213 " + String(FileHandle.size()));
   FileHandle.close();
-
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
 {
   //check filename
   String FilePath = ConstructPath(Client, false);
   if (!SPIFFS.exists(FilePath))
   {
     Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
-    return true;
+    return;
   }
 
   SPIFFS.remove(FilePath);
-    Client.ClientConnection.printf( "250 File %s successful deleted.\r\n", FilePath.c_str());
-  return true;
+  Client.ClientConnection.printf( "250 File %s successful deleted.\r\n", FilePath.c_str());
 }
 
-bool DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
 {
   if (!Process_DataCommand_Preprocess(Client))
-    return true;
+    return;
 
   //check filename
   String FilePath = ConstructPath(Client, false);
   if (FilePath.length() > 31)
   {
     Client.ClientConnection.printf( "550 File %s exeeds filename length of 31 characters.\r\n", FilePath.c_str());
-    return true;
+    return;
   }
 
   //open file
   Client.TransferFile = SPIFFS.open(FilePath, "w");
 
   Process_DataCommand_Responds_OK(Client, NTC_STOR);
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
 {
   if (!Process_DataCommand_Preprocess(Client))
-    return true;
+    return;
 
   //check filename
   String FilePath = ConstructPath(Client, false);
   if (!SPIFFS.exists(FilePath))
   {
     Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
-    return true;
+    return;
   }
 
   //open file
   Client.TransferFile = SPIFFS.open(FilePath, "r");
 
   Process_DataCommand_Responds_OK(Client, NTC_RETR);
-  return true;
 }
 
 bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
@@ -679,27 +656,21 @@ bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
     Client.ClientConnection.println( "450 Requested file action not taken, already an command is in process.");
     return false;
   }
-  
   return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand)
+void DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand)
 {
   if (!Client.DataConnection.connected())
-  {
     Client.ClientConnection.println( "150 Accepted data connection.");
-  }
   else
-  {
     Client.ClientConnection.println( "125 Data connection already open; transfer starting.");
-  }
 
   Client.TransferCommand = TransferCommand;
   CheckData(Client);
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
 {
   DBGLN("Data send/received. Closing data connection.");
   Client.DataConnection.flush();
@@ -707,7 +678,7 @@ bool DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
   Client.TransferCommand = NTC_NONE;
 }
 
-bool DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
 {
   switch (Client.TransferCommand)
   {
@@ -749,7 +720,7 @@ bool DFC_ESP7266FtpServer::CheckIfPresentList(std::vector<String>& DirList, cons
 ////                               012345678901234567890123456789012345678901234567890123456789
 //  Client.DataConnection.println( "-rw-rw-rw-    1 0        0              22 Jan 01  1970 1MB.zip");
 //  Client.DataConnection.println( "drw-rw-rw-    1 0        0               0 Jan 01  1970 SubDir");
-bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
 {
   DBGLN("Sending filelist.");
 
@@ -803,10 +774,9 @@ bool DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
 
   Client.ClientConnection.println( "226 File listing send.");
   Process_DataCommand_END(Client);
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
 {
   uint8_t Data[256];  
   int32_t BytesRead = Client.DataConnection.read(Data, 256);
@@ -814,10 +784,9 @@ bool DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
   {
     Client.TransferFile.write(Data, BytesRead);
   }
-  return true;
 }
 
-bool DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
+void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
 {
   uint8_t Data[256];
   int32_t BytesRead = Client.TransferFile.read(Data, 256);
@@ -830,5 +799,4 @@ bool DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
     Process_DataCommand_END(Client);
     Client.ClientConnection.println( "226 File transfer done.");
   }
-  return true;
 }
