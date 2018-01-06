@@ -20,6 +20,8 @@ To Do v2
 ------
 - [ ] Implement MLST and MLSD
 - [ ] Update FEAT with SIZE, MLST, MLSD
+- [ ] Implement a good public STOP() or KILL() function
+- [ ] Implement a good destructor
 
 Wish List
 ------
