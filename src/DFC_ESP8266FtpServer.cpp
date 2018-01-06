@@ -38,9 +38,7 @@ DFC_ESP7266FtpServer::DFC_ESP7266FtpServer()
 
 void DFC_ESP7266FtpServer::Init()
 {
-  FSInfo fs_info;
-  SPIFFS.info(fs_info);
-  mSpiffsMaxPathLength =  fs_info.maxPathLength-1;
+  SPIFFS.info(mSpiffsInfo);
   mFtpServer.begin();
 }
 
@@ -465,9 +463,9 @@ void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
     return;
 
   String FilePath = Help_GetPath(Client, false);
-  if (FilePath.length() > mSpiffsMaxPathLength)
+  if (FilePath.length() > mSpiffsInfo.maxPathLength-1)
   {
-    Client.ClientConnection.printf( "553 File %s exeeds filename length of %d characters.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    Client.ClientConnection.printf( "553 File %s exeeds filename length of %d characters.\r\n", FilePath.c_str(), mSpiffsInfo.maxPathLength-1);
     return;
   }
 
@@ -576,21 +574,21 @@ void DFC_ESP7266FtpServer::Process_RNTO(SClientInfo& Client)
 
   //Get FilePath
   String FilePath = Help_GetPath(Client, false);
-  if (FilePath.length() > mSpiffsMaxPathLength)
+  if (FilePath.length() > mSpiffsInfo.maxPathLength-1)
   {
-    Client.ClientConnection.printf( "553 File %s exeeds filename length of %d characters.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    Client.ClientConnection.printf( "553 File %s exeeds filename length of %d characters.\r\n", FilePath.c_str(), mSpiffsInfo.maxPathLength-1);
     return;
   }
   
   //Check if destination doesn't exists.
   if (SPIFFS.exists(FilePath))
   {
-    Client.ClientConnection.printf( "553 Destination filename %s already exists.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    Client.ClientConnection.printf( "553 Destination filename %s already exists.\r\n", FilePath.c_str(), mSpiffsInfo.maxPathLength-1);
     return;
   }
   else if (Help_DirExist(FilePath))
   {
-    Client.ClientConnection.printf( "553 Destination directory %s already exists.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    Client.ClientConnection.printf( "553 Destination directory %s already exists.\r\n", FilePath.c_str(), mSpiffsInfo.maxPathLength-1);
     return;
   }
   
@@ -607,13 +605,13 @@ void DFC_ESP7266FtpServer::Process_RNTO(SClientInfo& Client)
   //renaming whole directory.
   
   //check if filename of the new file is not to long for ALL files !
-  int32_t MaxSourceNameLength = mSpiffsMaxPathLength + ((int32_t) Client.SeqArgument.length()) - ((int32_t) FilePath.length());
+  int32_t MaxSourceNameLength = mSpiffsInfo.maxPathLength-1 + ((int32_t) Client.SeqArgument.length()) - ((int32_t) FilePath.length());
   Dir FindDir = SPIFFS.openDir("/");
   while (FindDir.next())
   {
     if (FindDir.fileName().length() > MaxSourceNameLength)
     {
-      Client.ClientConnection.printf( "553 one of more of files in directory will exceeds the maximum filename size of %d characters.\r\n", mSpiffsMaxPathLength);
+      Client.ClientConnection.printf( "553 one of more of files in directory will exceeds the maximum filename size of %d characters.\r\n", mSpiffsInfo.maxPathLength-1);
       return;
     }
   }  
