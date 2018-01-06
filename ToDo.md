@@ -13,13 +13,13 @@ To Do v1
 - [X] Implement SPIFFS.info for max path length
 - [X] Timeout on ftp and data connections
 - [X] Timeout on waiting for data connection
+- [X] implement NOOP
+- [X] Implement rename of files and directories
 
 To Do v2
 ------
 - [ ] Implement MLST and MLSD
 - [ ] Update FEAT with SIZE, MLST, MLSD
-- [ ] Implement rename
-- [ ] implement NOOP
 
 Wish List
 ------
@@ -39,6 +39,10 @@ Known Bugs
 ------
 - [X] Data connections function only the first time.
 - [X] Timeout during on client connection during transfer
+- [ ] Renaming file from "/test" to "/test1" give interesting results.
 
 Known Issues
 ------
+- Creating (MKD) directories is emulated. But it's not check on every command.
+  Resulting that some commands don't work on the emulated directory or results are not
+  exactly as expected.

@@ -51,7 +51,8 @@ struct SClientInfo
   nControlState ControlState;
   String Command;
   String Arguments;
-
+  String SeqCommand; //Command we expect next for commands that need to be in sequence
+  String SeqArgument; //argument of previous command
   nTransferMode TransferMode;
   int32_t PasvListenPort;
   bool WaitingForDataConnection;
@@ -62,7 +63,7 @@ struct SClientInfo
   File TransferFile;
   int32_t LastReceivedCommand;
   int32_t LastReceivedData;
- 
+
   void Reset()
   {
     InUse = false;
@@ -71,6 +72,10 @@ struct SClientInfo
     FtpState = NFS_IDLE;
     CurrentPath = "/";
     ControlState = NCS_START;
+    Command = "";
+    Arguments = "";
+    SeqCommand = "";
+    SeqArgument = "";
     TransferMode = NTM_UNKNOWN;
     PasvListenPort = 0;
     WaitingForDataConnection = false;

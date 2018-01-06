@@ -44,6 +44,9 @@ protected: //Help functions
   void      Process_STOR(SClientInfo& Client);
   void      Process_RETR(SClientInfo& Client);
   void      Process_ABOR(SClientInfo& Client);
+  void      Process_NOOP(SClientInfo& Client);
+  void      Process_RNFR(SClientInfo& Client);
+  void      Process_RNTO(SClientInfo& Client);
   void      Loop_DataConnection(SClientInfo& Client);
   bool      Process_DataCommand_Preprocess(SClientInfo& Client);
   void      Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand);

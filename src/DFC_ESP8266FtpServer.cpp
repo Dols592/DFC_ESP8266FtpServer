@@ -199,6 +199,15 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   DBGLN(Client.Arguments.c_str());
   
   bool Handled(true);
+  
+  if (Client.SeqCommand.length() > 0 && !cmd.equalsIgnoreCase(Client.SeqCommand))
+  {
+    //sequence error
+    Client.ClientConnection.printf( "503 Bad sequence of commands. Command %s expected.\r\n", Client.SeqCommand.c_str());
+    Client.SeqCommand = "";
+    Client.SeqArgument = "";
+    return;
+  }
 
   if (cmd.equalsIgnoreCase("USER")) Process_USER(Client);
   else if (cmd.equalsIgnoreCase("PASS")) Process_PASS(Client);
@@ -226,6 +235,9 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   else if (cmd.equalsIgnoreCase("STOR")) Process_STOR(Client);
   else if (cmd.equalsIgnoreCase("RETR")) Process_RETR(Client);
   else if (cmd.equalsIgnoreCase("ABOR")) Process_ABOR(Client);
+  else if (cmd.equalsIgnoreCase("NOOP")) Process_NOOP(Client);
+  else if (cmd.equalsIgnoreCase("RNFR")) Process_RNFR(Client);
+  else if (cmd.equalsIgnoreCase("RNTO")) Process_RNTO(Client);
   else
   {
     Client.ClientConnection.printf( "500 Unknown command %s.\n\r", cmd.c_str());
@@ -507,6 +519,123 @@ void DFC_ESP7266FtpServer::Process_ABOR(SClientInfo& Client)
   }
   
   Client.ClientConnection.println( "226 Transfer successful aborted.");
+}
+
+void DFC_ESP7266FtpServer::Process_NOOP(SClientInfo& Client)
+{
+  Client.ClientConnection.println( "200 Nooping Done.");
+}
+
+void DFC_ESP7266FtpServer::Process_RNFR(SClientInfo& Client)
+{
+  //get and check argument
+  String Path = Help_GetFirstArgument(Client);
+  if (Path.length() == 0)
+  {
+    Client.ClientConnection.println( "501 No filename is given.");
+    return;
+  }
+
+  //Get FilePath
+  String FilePath = Help_GetPath(Client, false);
+  if (SPIFFS.exists(FilePath))
+  {
+    Client.ClientConnection.printf( "350 File %s going to be renamed. RNTO expected next.\r\n", FilePath.c_str());
+    Client.SeqCommand = "RNTO";
+    Client.SeqArgument = FilePath;
+  }
+  else if (Help_DirExist(FilePath))
+  {
+    Client.ClientConnection.printf( "350 Directory %s going to be renamed. RNTO expected next.\r\n", FilePath.c_str());
+    Client.SeqCommand = "RNTO";
+    Client.SeqArgument = FilePath;
+  }
+  else
+  {
+    Client.ClientConnection.printf( "550 File %s does not exist.\r\n", FilePath.c_str());
+  }
+}
+
+void DFC_ESP7266FtpServer::Process_RNTO(SClientInfo& Client)
+{
+  if (!Client.SeqCommand.equalsIgnoreCase("RNTO"))
+  {
+    Client.ClientConnection.println( "503 Bad sequence of commands. RNFR needs to be done first.");
+    return;
+  }
+  
+  Client.SeqCommand = "";
+  
+  //get and check argument
+  String Path = Help_GetFirstArgument(Client);
+  if (Path.length() == 0)
+  {
+    Client.ClientConnection.println( "501 No filename is given.");
+    return;
+  }
+
+  //Get FilePath
+  String FilePath = Help_GetPath(Client, false);
+  if (FilePath.length() > mSpiffsMaxPathLength)
+  {
+    Client.ClientConnection.printf( "553 File %s exeeds filename length of %d characters.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    return;
+  }
+  
+  //Check if destination doesn't exists.
+  if (SPIFFS.exists(FilePath))
+  {
+    Client.ClientConnection.printf( "553 Destination filename %s already exists.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    return;
+  }
+  else if (Help_DirExist(FilePath))
+  {
+    Client.ClientConnection.printf( "553 Destination directory %s already exists.\r\n", FilePath.c_str(), mSpiffsMaxPathLength);
+    return;
+  }
+  
+  //renaming one file
+  if (SPIFFS.exists(Client.SeqArgument))
+  {
+    if (SPIFFS.rename(Client.SeqArgument, FilePath))
+      Client.ClientConnection.printf( "250 file %s renamed to %s.\r\n", Client.SeqArgument.c_str(), FilePath.c_str());
+    else
+      Client.ClientConnection.printf( "451 file %s renaming to %s failed.\r\n", Client.SeqArgument.c_str(), FilePath.c_str());
+    return;
+  }
+  
+  //renaming whole directory.
+  
+  //check if filename of the new file is not to long for ALL files !
+  int32_t MaxSourceNameLength = mSpiffsMaxPathLength + ((int32_t) Client.SeqArgument.length()) - ((int32_t) FilePath.length());
+  Dir FindDir = SPIFFS.openDir("/");
+  while (FindDir.next())
+  {
+    if (FindDir.fileName().length() > MaxSourceNameLength)
+    {
+      Client.ClientConnection.printf( "553 one of more of files in directory will exceeds the maximum filename size of %d characters.\r\n", mSpiffsMaxPathLength);
+      return;
+    }
+  }  
+  
+  //now rename alle the files
+  FindDir = SPIFFS.openDir("/");
+  while (FindDir.next())
+  {
+    String SrcName = FindDir.fileName();
+    String DstName(SrcName);
+
+    if (DstName.indexOf(Client.SeqArgument) == 0)
+    {
+      DstName.replace(Client.SeqArgument, FilePath);
+      if (SPIFFS.rename(SrcName, DstName))
+        Client.ClientConnection.printf( "250-file %s renamed to %s.\r\n", SrcName.c_str(), DstName.c_str());
+      else
+        Client.ClientConnection.printf( "250-file %s renaming to %s failed.\r\n", SrcName.c_str(), DstName.c_str());      
+    }
+  }
+
+  Client.ClientConnection.printf( "250 directory %s renamed to %s.\r\n", Client.SeqArgument.c_str(), FilePath.c_str());
 }
 
 void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
@@ -871,6 +1000,9 @@ bool DFC_ESP7266FtpServer::Help_GetParentDir(String FilePath, String& ParentDir)
 //DirPath needs to be absolute
 bool DFC_ESP7266FtpServer::Help_DirExist(String DirPath)
 {
+  if (!DirPath.endsWith("/"))
+    DirPath += "/";
+
   Dir FindDir = SPIFFS.openDir("/");
   while (FindDir.next())
   {
