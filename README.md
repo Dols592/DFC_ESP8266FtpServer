@@ -4,7 +4,7 @@ An FTP server for the WEMOS D1.
 
 Development status
 ------
-In it's initial development. Highly instable.
+Most is implemented. It's should be usable. But needs more testing to call it stable.
 
 Features
 ------
