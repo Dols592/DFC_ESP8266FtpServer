@@ -12,7 +12,6 @@
 #define FTP_CONTROL_TIMEOUT     300000
 #define FTP_DATA_PORT_START     20100
 #define FTP_DATA_PORT_END       20200
-#define FTP_DATA_BUF_SIZE       1000
 #define FTP_DATA_TIMEOUT        30000
 
 //debug
@@ -813,11 +812,10 @@ void DFC_ESP8266FtpServer::Process_Data_STOR(SClientInfo& Client)
     return;
   }
 
-  uint8_t Data[FTP_DATA_BUF_SIZE];  
-  int32_t BytesRead = Client.DataConnection.read(Data, FTP_DATA_BUF_SIZE);
+  int32_t BytesRead = Client.DataConnection.read(Client.DataBuffer, FTP_DATA_BUF_SIZE);
   if (BytesRead > 0)
   {
-    Client.TransferFile.write(Data, BytesRead);
+    Client.TransferFile.write(Client.DataBuffer, BytesRead);
     Client.LastReceivedData = millis();
   }
 }
@@ -831,11 +829,10 @@ void DFC_ESP8266FtpServer::Process_Data_RETR(SClientInfo& Client)
     return;
   }
 
-  uint8_t Data[FTP_DATA_BUF_SIZE];
-  int32_t BytesRead = Client.TransferFile.read(Data, FTP_DATA_BUF_SIZE);
+  int32_t BytesRead = Client.TransferFile.read(Client.DataBuffer, FTP_DATA_BUF_SIZE);
   if (BytesRead > 0)
   {
-    Client.DataConnection.write(Data, BytesRead);
+    Client.DataConnection.write(Client.DataBuffer, BytesRead);
     Client.LastReceivedData = millis();
   }
   else

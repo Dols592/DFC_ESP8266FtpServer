@@ -3,6 +3,7 @@
 #define DFC_ESP8266_FTP_SERVER_DATA_H
 
 //Config defines
+#define FTP_DATA_BUF_SIZE       1000
 
 //Includes
 #include <ESP8266WiFi.h>
@@ -63,6 +64,7 @@ struct SClientInfo
   File TransferFile;
   int32_t LastReceivedCommand;
   int32_t LastReceivedData;
+  uint8_t* DataBuffer;
 
   void Reset()
   {
@@ -95,6 +97,7 @@ struct SClientInfo
   }
   SClientInfo()
   {
+    DataBuffer = new uint8_t[FTP_DATA_BUF_SIZE];
     PasvListenServer = NULL;
     Reset();
   }
