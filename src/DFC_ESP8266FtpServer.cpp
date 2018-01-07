@@ -30,19 +30,19 @@
   #define DBGF(...)
 #endif
 
-DFC_ESP7266FtpServer::DFC_ESP7266FtpServer()
+DFC_ESP8266FtpServer::DFC_ESP8266FtpServer()
   : mFtpServer( FTP_CONTROL_PORT )
   , mLastDataPort(FTP_DATA_PORT_START)
 {
 }
 
-void DFC_ESP7266FtpServer::Init()
+void DFC_ESP8266FtpServer::Init()
 {
   SPIFFS.info(mSpiffsInfo);
   mFtpServer.begin();
 }
 
-void DFC_ESP7266FtpServer::Loop()
+void DFC_ESP8266FtpServer::Loop()
 {
   if (mFtpServer.hasClient())
   {
@@ -82,7 +82,7 @@ void DFC_ESP7266FtpServer::Loop()
   }
 }
 
-void DFC_ESP7266FtpServer::Loop_ClientConnection(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Loop_ClientConnection(SClientInfo& Client)
 {
   //is still connected?
   if (!Client.ClientConnection.connected())
@@ -132,7 +132,7 @@ void DFC_ESP7266FtpServer::Loop_ClientConnection(SClientInfo& Client)
   Loop_DataConnection(Client);
 }
 
-void DFC_ESP7266FtpServer::Loop_GetControlData(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Loop_GetControlData(SClientInfo& Client)
 {
   while(1)
   {
@@ -184,7 +184,7 @@ void DFC_ESP7266FtpServer::Loop_GetControlData(SClientInfo& Client)
   }
 }
 
-void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
 {
   //preprocess
   Client.Command.trim();
@@ -248,7 +248,7 @@ void DFC_ESP7266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   }
 }
 
-void DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_USER(SClientInfo& Client)
 {
   if (Client.FtpState > NFS_WAITFORPASSWORD)
   {
@@ -283,7 +283,7 @@ void DFC_ESP7266FtpServer::Process_USER(SClientInfo& Client)
   }
 }
 
-void DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_PASS(SClientInfo& Client)
 {
   if (Client.FtpState <= NFS_WAITFORUSERNAME)
   {
@@ -307,17 +307,17 @@ void DFC_ESP7266FtpServer::Process_PASS(SClientInfo& Client)
   Client.FtpState = NFS_WAITFORCOMMAND;
 }
 
-void DFC_ESP7266FtpServer::Process_QUIT(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_QUIT(SClientInfo& Client)
 {
   Help_DisconnectClient(Client);
 }
 
-void DFC_ESP7266FtpServer::Process_SYST(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_SYST(SClientInfo& Client)
 {
   Client.ClientConnection.println( "215 UNIX esp8266.");
 }
 
-void DFC_ESP7266FtpServer::Process_FEAT(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_FEAT(SClientInfo& Client)
 {
   Client.ClientConnection.println( "211- Supported Features.");
   Client.ClientConnection.println( " LIST");
@@ -325,17 +325,17 @@ void DFC_ESP7266FtpServer::Process_FEAT(SClientInfo& Client)
 }
 
 
-void DFC_ESP7266FtpServer::Process_HELP(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_HELP(SClientInfo& Client)
 {
   Client.ClientConnection.println( "214 Ask the whizzkid for help.");
 }
 
-void DFC_ESP7266FtpServer::Process_PWD(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_PWD(SClientInfo& Client)
 {
   Client.ClientConnection.printf( "257 \"%s\" Current Directory.\r\n", Client.CurrentPath.c_str());
 }
 
-void DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_CDUP(SClientInfo& Client)
 {
   String NewPath;
   Help_GetParentDir(Client.CurrentPath, NewPath);
@@ -346,7 +346,7 @@ void DFC_ESP7266FtpServer::Process_CDUP(SClientInfo& Client)
 
 //Because directories are simulated, we accept CWD to
 //dir that does not "exists".
-void DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_CWD(SClientInfo& Client)
 {
   String NewPath = Help_GetPath(Client, true);
 
@@ -355,7 +355,7 @@ void DFC_ESP7266FtpServer::Process_CWD(SClientInfo& Client)
   DBGLN("New Directory: " + NewPath);
 }
 
-void DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_MKD(SClientInfo& Client)
 {
   Client.TempDirectory = Help_GetPath(Client, true);
   Client.ClientConnection.printf( "257 \"%s\" is created.\n\r", Client.TempDirectory.c_str());
@@ -363,7 +363,7 @@ void DFC_ESP7266FtpServer::Process_MKD(SClientInfo& Client)
 
 //we never accept directory removal. If all
 //files are removed, directorie is removed automatically
-void DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_RMD(SClientInfo& Client)
 {
   String Directory = Help_GetPath(Client, true);
   if (Help_DirExist(Directory))
@@ -378,7 +378,7 @@ void DFC_ESP7266FtpServer::Process_RMD(SClientInfo& Client)
   Client.ClientConnection.printf( "250 Directory \"%s\" is removed.\n\r", Directory.c_str());
 }
 
-void DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_TYPE(SClientInfo& Client)
 {
   const String& arg(Client.Arguments); //for easy access
 
@@ -390,7 +390,7 @@ void DFC_ESP7266FtpServer::Process_TYPE(SClientInfo& Client)
     Client.ClientConnection.println( "504 Unknow TYPE.");
 }
 
-void DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_PASV(SClientInfo& Client)
 {
   IPAddress LocalIP = Client.ClientConnection.localIP();
   if (Client.PasvListenServer == NULL)
@@ -405,12 +405,12 @@ void DFC_ESP7266FtpServer::Process_PASV(SClientInfo& Client)
   Client.TransferMode = NTC_PASSIVE;
 }
 
-void DFC_ESP7266FtpServer::Process_PORT(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_PORT(SClientInfo& Client)
 {
   //Client.TransferMode = NTC_ACTIVE;
 }
 
-void DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_LIST(SClientInfo& Client)
 {
   if (!Process_DataCommand_Preprocess(Client))
     return;
@@ -420,7 +420,7 @@ void DFC_ESP7266FtpServer::Process_LIST(SClientInfo& Client)
   Process_DataCommand_Responds_OK(Client, NTC_LIST);
 }
 
-void DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_SIZE(SClientInfo& Client)
 {
   //check filename
   String FilePath = Help_GetPath(Client, false);
@@ -441,7 +441,7 @@ void DFC_ESP7266FtpServer::Process_SIZE(SClientInfo& Client)
   FileHandle.close();
 }
 
-void DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_DELE(SClientInfo& Client)
 {
   //check filename
   String FilePath = Help_GetPath(Client, false);
@@ -457,7 +457,7 @@ void DFC_ESP7266FtpServer::Process_DELE(SClientInfo& Client)
     Client.ClientConnection.printf( "250 File %s successful deleted.\r\n", FilePath.c_str());
 }
 
-void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_STOR(SClientInfo& Client)
 {
   if (!Process_DataCommand_Preprocess(Client))
     return;
@@ -482,7 +482,7 @@ void DFC_ESP7266FtpServer::Process_STOR(SClientInfo& Client)
   Process_DataCommand_Responds_OK(Client, NTC_STOR);
 }
 
-void DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_RETR(SClientInfo& Client)
 {
   if (!Process_DataCommand_Preprocess(Client))
     return;
@@ -508,7 +508,7 @@ void DFC_ESP7266FtpServer::Process_RETR(SClientInfo& Client)
   Process_DataCommand_Responds_OK(Client, NTC_RETR);
 }
 
-void DFC_ESP7266FtpServer::Process_ABOR(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_ABOR(SClientInfo& Client)
 {
   if (Client.TransferCommand != NTC_NONE)
   {
@@ -519,12 +519,12 @@ void DFC_ESP7266FtpServer::Process_ABOR(SClientInfo& Client)
   Client.ClientConnection.println( "226 Transfer successful aborted.");
 }
 
-void DFC_ESP7266FtpServer::Process_NOOP(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_NOOP(SClientInfo& Client)
 {
   Client.ClientConnection.println( "200 Nooping Done.");
 }
 
-void DFC_ESP7266FtpServer::Process_RNFR(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_RNFR(SClientInfo& Client)
 {
   //get and check argument
   String Path = Help_GetFirstArgument(Client);
@@ -554,7 +554,7 @@ void DFC_ESP7266FtpServer::Process_RNFR(SClientInfo& Client)
   }
 }
 
-void DFC_ESP7266FtpServer::Process_RNTO(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_RNTO(SClientInfo& Client)
 {
   if (!Client.SeqCommand.equalsIgnoreCase("RNTO"))
   {
@@ -636,7 +636,7 @@ void DFC_ESP7266FtpServer::Process_RNTO(SClientInfo& Client)
   Client.ClientConnection.printf( "250 directory %s renamed to %s.\r\n", Client.SeqArgument.c_str(), FilePath.c_str());
 }
 
-void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Loop_DataConnection(SClientInfo& Client)
 {
   if (Client.PasvListenServer == NULL)
     return;
@@ -681,7 +681,7 @@ void DFC_ESP7266FtpServer::Loop_DataConnection(SClientInfo& Client)
   else if (Client.TransferCommand == NTC_RETR) Process_Data_RETR(Client);
 }
 
-bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
+bool DFC_ESP8266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
 {
   if (Client.TransferMode == NTM_UNKNOWN)
   {
@@ -696,7 +696,7 @@ bool DFC_ESP7266FtpServer::Process_DataCommand_Preprocess(SClientInfo& Client)
   return true;
 }
 
-void DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand)
+void DFC_ESP8266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, nTransferCommand TransferCommand)
 {
   if (!Client.DataConnection.connected())
   {
@@ -711,7 +711,7 @@ void DFC_ESP7266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, 
   Loop_DataConnection(Client);
 }
 
-void DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_DataCommand_END(SClientInfo& Client)
 {
   DBGLN("Data send/received. Closing data connection.");
   Client.DataConnection.flush();
@@ -724,7 +724,7 @@ void DFC_ESP7266FtpServer::Process_DataCommand_END(SClientInfo& Client)
   Client.TransferCommand = NTC_NONE;
 }
 
-void DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
 {
   switch (Client.TransferCommand)
   {
@@ -748,7 +748,7 @@ void DFC_ESP7266FtpServer::Process_DataCommand_DISCONNECTED(SClientInfo& Client)
 ////                               012345678901234567890123456789012345678901234567890123456789
 //  Client.DataConnection.println( "-rw-rw-rw-    1 0        0              22 Jan 01  1970 1MB.zip");
 //  Client.DataConnection.println( "drw-rw-rw-    1 0        0               0 Jan 01  1970 SubDir");
-void DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_Data_LIST(SClientInfo& Client)
 {
   DBGLN("Sending filelist.");
 
@@ -804,7 +804,7 @@ void DFC_ESP7266FtpServer::Process_Data_LIST(SClientInfo& Client)
   Process_DataCommand_END(Client);
 }
 
-void DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_Data_STOR(SClientInfo& Client)
 {
   if (!Client.TransferFile)
   {
@@ -822,7 +822,7 @@ void DFC_ESP7266FtpServer::Process_Data_STOR(SClientInfo& Client)
   }
 }
 
-void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Process_Data_RETR(SClientInfo& Client)
 {  
   if (!Client.TransferFile)
   {
@@ -845,7 +845,7 @@ void DFC_ESP7266FtpServer::Process_Data_RETR(SClientInfo& Client)
   }
 }
 
-bool DFC_ESP7266FtpServer::Help_GetEmptyClientInfo(int32_t& Pos)
+bool DFC_ESP8266FtpServer::Help_GetEmptyClientInfo(int32_t& Pos)
 {
   for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
   {
@@ -860,7 +860,7 @@ bool DFC_ESP7266FtpServer::Help_GetEmptyClientInfo(int32_t& Pos)
   return false;
 }
 
-int32_t DFC_ESP7266FtpServer::Help_GetNextDataPort()
+int32_t DFC_ESP8266FtpServer::Help_GetNextDataPort()
 {
   int32_t NewPort = mLastDataPort;
   while (1)
@@ -884,7 +884,7 @@ int32_t DFC_ESP7266FtpServer::Help_GetNextDataPort()
   }
 }
 
-void DFC_ESP7266FtpServer::Help_DisconnectClient(SClientInfo& Client)
+void DFC_ESP8266FtpServer::Help_DisconnectClient(SClientInfo& Client)
 {
   if (Client.ClientConnection.connected())
     Client.ClientConnection.println("221 Goodbye");
@@ -892,7 +892,7 @@ void DFC_ESP7266FtpServer::Help_DisconnectClient(SClientInfo& Client)
   Client.Reset();
 }
 
-String DFC_ESP7266FtpServer::Help_GetFirstArgument(SClientInfo& Client)
+String DFC_ESP8266FtpServer::Help_GetFirstArgument(SClientInfo& Client)
 {
   int32_t Start = 0;
   int32_t End = Client.Arguments.length();
@@ -905,7 +905,7 @@ String DFC_ESP7266FtpServer::Help_GetFirstArgument(SClientInfo& Client)
   return Client.Arguments.substring(Start, End);
 }
 
-String DFC_ESP7266FtpServer::Help_GetPath(SClientInfo& Client, bool IsPath)
+String DFC_ESP8266FtpServer::Help_GetPath(SClientInfo& Client, bool IsPath)
 {
   String Path = Help_GetFirstArgument(Client);
   Path.replace("\\", "/");
@@ -938,7 +938,7 @@ Return value
   true  : Name found
   false : FilePath is file or subdirectory in CurrentDir
 */
-bool DFC_ESP7266FtpServer::Help_GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir)
+bool DFC_ESP8266FtpServer::Help_GetFileName(String CurrentDir, String FilePath, String& FileName, bool& IsDir)
 {
   int32_t FilePathSize = FilePath.length();
   int32_t CurrentDirSize = CurrentDir.length();
@@ -965,7 +965,7 @@ bool DFC_ESP7266FtpServer::Help_GetFileName(String CurrentDir, String FilePath, 
   return true;
 }
 
-bool DFC_ESP7266FtpServer::Help_GetParentDir(String FilePath, String& ParentDir)
+bool DFC_ESP8266FtpServer::Help_GetParentDir(String FilePath, String& ParentDir)
 {
   String Path = FilePath;
   Path.replace("\\", "/");
@@ -996,7 +996,7 @@ bool DFC_ESP7266FtpServer::Help_GetParentDir(String FilePath, String& ParentDir)
 
 //If directory exist, it's automatically not emtpy, because Empty directories do not exist.
 //DirPath needs to be absolute
-bool DFC_ESP7266FtpServer::Help_DirExist(String DirPath)
+bool DFC_ESP8266FtpServer::Help_DirExist(String DirPath)
 {
   if (!DirPath.endsWith("/"))
     DirPath += "/";
@@ -1013,7 +1013,7 @@ bool DFC_ESP7266FtpServer::Help_DirExist(String DirPath)
 
 //creates a list with unique names. If a name is already present in list,
 //it returns false.
-bool DFC_ESP7266FtpServer::Help_CheckIfDirIsUnique(std::vector<String>& DirList, const String& Name)
+bool DFC_ESP8266FtpServer::Help_CheckIfDirIsUnique(std::vector<String>& DirList, const String& Name)
 {
   bool Found(false);
   for (std::vector<String>::iterator it=DirList.begin(); it!=DirList.end(); it++)

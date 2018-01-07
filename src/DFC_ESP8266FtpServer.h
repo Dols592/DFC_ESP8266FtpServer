@@ -11,10 +11,10 @@
 #include "DFC_ESP8266FtpServerData.h"
 #include <vector>
 
-class DFC_ESP7266FtpServer
+class DFC_ESP8266FtpServer
 {
 public: //Constructor
-  DFC_ESP7266FtpServer();
+  DFC_ESP8266FtpServer();
   
 public: //Interface
   void      Init();
