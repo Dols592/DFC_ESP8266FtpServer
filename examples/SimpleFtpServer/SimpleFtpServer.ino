@@ -10,7 +10,7 @@
 #include "DFC_ESP8266FtpServer.h"
 #include <ESP8266WiFi.h>
 
-DFC_ESP7266FtpServer FtpServer;
+DFC_ESP8266FtpServer FtpServer;
 
 const char* gWifiSid = "ssid";
 const char* gWifiPassword = "password";
