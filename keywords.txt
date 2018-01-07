@@ -1,18 +1,18 @@
 ##############################################
-# Syntax Coloring Map For DFC_ESP7266FtpServer
+# Syntax Coloring Map For DFC_ESP8266FtpServer
 ##############################################
 
 #######################################
 # Library (KEYWORD3)
 #######################################
 
-DFC_ESP7266FtpServer	KEYWORD3
+DFC_ESP8266FtpServer	KEYWORD3
 
 #######################################
 # Datatypes (KEYWORD1)
 #######################################
 
-DFC_ESP7266FtpServer	KEYWORD1
+DFC_ESP8266FtpServer	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
