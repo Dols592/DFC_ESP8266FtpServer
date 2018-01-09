@@ -915,8 +915,7 @@ String DFC_ESP8266FtpServer::Help_GetPath(SClientInfo& Client, bool IsPath)
   if (IsPath)
     Path += "/";
  
-  while (Path.indexOf("//") >= 0)
-    Path.replace("//", "/");
+  Path.replace("//", "/");
 
   return Path;
 }
@@ -966,8 +965,6 @@ bool DFC_ESP8266FtpServer::Help_GetParentDir(String FilePath, String& ParentDir)
 {
   String Path = FilePath;
   Path.replace("\\", "/");
-  while (Path.indexOf("//") >= 0)
-    Path.replace("//", "/");
 
   if (Path.endsWith("/"))
     Path.remove(Path.length()-1);
