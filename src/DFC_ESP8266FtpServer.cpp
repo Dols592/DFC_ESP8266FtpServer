@@ -5,6 +5,7 @@
 #include "DFC_ESP8266FtpServer.h"
 #include <ESP8266WiFi.h>
 #include <FS.h>
+#include <DLog.h>
 
 //Config defines
 #define FTP_DEBUG
@@ -70,6 +71,9 @@ void DFC_ESP8266FtpServer::Loop()
     mClientInfo[Pos].FtpState = NFS_WAITFORUSERNAME;
     mClientInfo[Pos].LastReceivedCommand = millis();
     mClientInfo[Pos].ClientConnection.println( "220 --==[ Welcome ]==--");
+    
+    DLog::Log(LOGSEVERITY_USER, "New: %s:",  mClientInfo[Pos].ClientConnection.remoteIP().toString().c_str());
+
   }
 
   for (int32_t i=0; i<FTP_MAX_CLIENTS; i++)
@@ -115,15 +119,8 @@ void DFC_ESP8266FtpServer::Loop_ClientConnection(SClientInfo& Client)
     uint16_t Lport = Client.DataConnection.localPort();
     uint16_t Rport = Client.DataConnection.remotePort();
     //String(Lip);
-    DBG("Local:");
-    DBG(Lip);
-    DBG(":");
-    DBG(Lport);
-    DBG("  ");
-    DBG(Rip);
-    DBG(":");
-    DBG(Rport);
-    DBGLN("");
+    //DLog::Log(LOGSEVERITY_USER, "New: %s:",  Rip.toString().c_str());
+    DBGF("New: %s:%p  %s:%p\r\n",  Lip.toString().c_str(), Lport, Rip.toString().c_str(), Rport);
   }
 
   //Check for new control data
@@ -190,11 +187,9 @@ void DFC_ESP8266FtpServer::Loop_ProcessCommand(SClientInfo& Client)
   Client.Arguments.trim();
   const String& cmd(Client.Command); //for easy access
 
-  DBG("Command: ");
-  DBG(cmd.c_str());
-  DBG(" ");
-  DBGLN(Client.Arguments.c_str());
-  
+  DLog::Log(LOGSEVERITY_USER, "Command: %s %s", cmd.c_str(), Client.Arguments.c_str());
+  DBGF("Command: %s %s\r\n", cmd.c_str(), Client.Arguments.c_str());
+
   bool Handled(true);
   
   if (Client.SeqCommand.length() > 0 && !cmd.equalsIgnoreCase(Client.SeqCommand))
@@ -650,6 +645,7 @@ void DFC_ESP8266FtpServer::Loop_DataConnection(SClientInfo& Client)
       int32 Stopwatch = millis() - Client.LastReceivedData;
       if (Stopwatch > FTP_DATA_TIMEOUT)
       {
+        DLog::Log(LOGSEVERITY_USER, "Timeout on Data.");
         DBGLN(("Timeout on waiting for data connection."));
         Client.ClientConnection.println( "425 Can't open data connection.");
         Process_DataCommand_END(Client);
@@ -668,6 +664,7 @@ void DFC_ESP8266FtpServer::Loop_DataConnection(SClientInfo& Client)
   int32 Stopwatch = millis() - Client.LastReceivedData;
   if (Stopwatch > FTP_DATA_TIMEOUT)
   {
+    DLog::Log(LOGSEVERITY_USER, "Timeout on Control.");
     DBGLN(("It's quiet on the dataconnection. Closing."));
     Client.ClientConnection.println( "426 Connection closed; transfer aborted. Timeout on data connection.");
     Process_DataCommand_END(Client);
@@ -712,6 +709,7 @@ void DFC_ESP8266FtpServer::Process_DataCommand_Responds_OK(SClientInfo& Client, 
 
 void DFC_ESP8266FtpServer::Process_DataCommand_END(SClientInfo& Client)
 {
+  DLog::Log(LOGSEVERITY_USER, "Data action done.");
   DBGLN("Data send/received. Closing data connection.");
   Client.DataConnection.flush();
   Client.DataConnection.stop();
